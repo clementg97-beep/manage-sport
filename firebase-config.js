@@ -18,12 +18,12 @@
 // ---------------------------------------------------------------
 
 var firebaseConfig = {
-  apiKey: "REMPLACE_MOI",
-  authDomain: "REMPLACE_MOI.firebaseapp.com",
-  projectId: "REMPLACE_MOI",
-  storageBucket: "REMPLACE_MOI.appspot.com",
-  messagingSenderId: "REMPLACE_MOI",
-  appId: "REMPLACE_MOI"
+  apiKey: "AIzaSyDpp8Yc5ZHmhAVBLVHmV79H5PVQOUj9ep8",
+  authDomain: "manage-sport.firebaseapp.com",
+  projectId: "manage-sport",
+  storageBucket: "manage-sport.firebasestorage.app",
+  messagingSenderId: "1016460412310",
+  appId: "1:1016460412310:web:0bab02a8ce07b72341c9b7"
 };
 
 firebase.initializeApp(firebaseConfig);

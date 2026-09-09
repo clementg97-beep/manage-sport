@@ -492,8 +492,8 @@
       </label>
     </div>
     <label class="field">
-      <span class="lbl">Durée (minutes)</span>
-      <input type="number" id="fDuration" value="90" min="15" step="15">
+      <span class="lbl">Durée</span>
+      <select id="fDuration"></select>
     </label>
     <div class="row2">
       <label class="field">
@@ -583,6 +583,24 @@
     { key: "central_2", label: "Central #2" },
     { key: "libero", label: "Libéro" }
   ];
+
+  var DURATION_OPTIONS = []; // minutes, 30min à 4h par tranches de 15
+  (function () {
+    for (var m = 30; m <= 240; m += 15) DURATION_OPTIONS.push(m);
+  })();
+  function formatDuration(min) {
+    var h = Math.floor(min / 60), r = min % 60;
+    if (h === 0) return r + "min";
+    if (r === 0) return h + "h";
+    return h + "h" + String(r).padStart(2, "0");
+  }
+  function populateDurationSelect(selected) {
+    var sel = document.getElementById("fDuration");
+    sel.innerHTML = DURATION_OPTIONS.map(function (m) {
+      return '<option value="' + m + '">' + formatDuration(m) + '</option>';
+    }).join("");
+    sel.value = selected || 90;
+  }
 
   // ---------- utils ----------
   function slugify(str) {
@@ -973,7 +991,7 @@
     setTypeSel(s ? (s.type || "pratique") : "pratique");
     document.getElementById("fDate").value = s ? s.date : todayStr();
     document.getElementById("fTime").value = s ? s.time : "18:30";
-    document.getElementById("fDuration").value = s ? s.duration : 90;
+    populateDurationSelect(s ? s.duration : 90);
     document.getElementById("fCourt").value = s ? s.court : "";
     document.getElementById("fNotes").value = s ? (s.notes || "") : "";
     document.getElementById("fLink").value = s ? (s.link || "") : "";
@@ -1385,7 +1403,7 @@
     var gym = s.gymId ? gyms[s.gymId] : null;
     var html = '<div class="card" data-id="' + s.id + '">';
     html += '<div class="card-main" data-role="toggle-roster">';
-    html += '<div class="card-time"><div class="hh">' + hh + '</div><div class="dur">' + s.duration + ' min</div></div>';
+    html += '<div class="card-time"><div class="hh">' + hh + '</div><div class="dur">' + formatDuration(s.duration) + '</div></div>';
     html += '<div class="card-body">';
     html += '<div class="card-title">' + escapeHtml(sessionLabel(s)) + '</div>';
     html += '<div class="card-meta"><span>📍 ' + escapeHtml(s.gymName || "") + '</span>' + (s.court ? '<span>· ' + escapeHtml(s.court) + '</span>' : '') + '</div>';

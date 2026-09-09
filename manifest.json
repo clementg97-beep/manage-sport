@@ -1,6 +1,6 @@
 {
-  "name": "Créneau",
-  "short_name": "Créneau",
+  "name": "Manage-sport",
+  "short_name": "Manage-sport",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -31,7 +31,7 @@ localisation des gymnases avec carte et itinéraire.
 cd creneau-app
 git init                      # si pas déjà fait
 git add .
-git commit -m "Créneau - première version"
+git commit -m "Manage-sport - première version"
 git branch -M main
 git remote add origin https://github.com/<ton-compte>/<ton-repo>.git
 git push -u origin main

@@ -24,7 +24,7 @@
 //      "Bonjour {{to_name}}, une nouvelle séance a été ajoutée pour
 //      {{team_name}} : {{session_title}} le {{session_date}} à
 //      {{session_time}} ({{gym_name}}). Réponds directement dans
-//      l'app Créneau pour indiquer ta disponibilité."
+//      l'app Manage-sport pour indiquer ta disponibilité."
 //    -> note le "Template ID" (ex. template_xyz789).
 // 4. Icône compte (en haut à droite) -> "General" -> copie la
 //    "Public Key".

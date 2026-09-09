@@ -1328,14 +1328,15 @@
   }
 
   // ---------- availability ----------
-  function setAvailability(sessionId, status, comment) {
+  function saveAvailabilityFields(sessionId, fields) {
     if (!identity || !teamId) return;
     if (!dbReady) { toast("Réponse indisponible — vérifie la configuration Firebase"); return; }
     var docId = sessionId + "_" + slugify(identity.name);
-    availCol(teamId).doc(docId).set({
-      sessionId: sessionId, player: identity.name, status: status, comment: comment || "",
-      updatedAt: new Date().toISOString()
-    }).catch(function () { toast("Erreur d'enregistrement"); });
+    var data = Object.assign({ sessionId: sessionId, player: identity.name, updatedAt: new Date().toISOString() }, fields);
+    availCol(teamId).doc(docId).set(data, { merge: true }).catch(function () { toast("Erreur d'enregistrement"); });
+  }
+  function setAvailability(sessionId, status) {
+    saveAvailabilityFields(sessionId, { status: status });
   }
 
   // ---------- admin actions ----------
@@ -1652,6 +1653,14 @@
       html += '</div>';
       if (myStatus) {
         html += '<div style="padding:0 14px 14px;"><input type="text" data-act="comment" data-id="' + s.id + '" value="' + escapeHtml(myStatus.comment || "") + '" placeholder="Commentaire (optionnel, ex. en retard de 10 min)" maxlength="120" style="font-size:13px; padding:9px 10px;"></div>';
+        var mentalVal = myStatus.mentalScore || 5, physicalVal = myStatus.physicalScore || 5;
+        html += '<div style="padding:0 14px 16px; display:flex; gap:14px;">';
+        html += '<label style="flex:1; font-size:11.5px; color:var(--text-muted); font-weight:700;">🧠 Mental — <span data-role="mental-val-' + s.id + '">' + mentalVal + '</span>/10' +
+          '<input type="range" min="1" max="10" value="' + mentalVal + '" data-act="mental" data-id="' + s.id + '" style="width:100%; margin-top:4px;"></label>';
+        html += '<label style="flex:1; font-size:11.5px; color:var(--text-muted); font-weight:700;">💪 Physique — <span data-role="physical-val-' + s.id + '">' + physicalVal + '</span>/10' +
+          '<input type="range" min="1" max="10" value="' + physicalVal + '" data-act="physical" data-id="' + s.id + '" style="width:100%; margin-top:4px;"></label>';
+        html += '</div>';
+        html += '<div class="hint" style="margin:-10px 14px 14px; padding:0;">Visible uniquement par les coachs et l\'administrateur.</div>';
       }
     }
 
@@ -1667,8 +1676,10 @@
 
       html += '<div class="roster' + (openRosterIds[s.id] ? ' open' : '') + '" data-roster-for="' + s.id + '">';
       sr.entries.forEach(function (e) {
+        var wellness = (canManageTeam() && (e.mentalScore || e.physicalScore)) ?
+          '<div class="roster-comment">🧠 ' + (e.mentalScore || "-") + '/10 · 💪 ' + (e.physicalScore || "-") + '/10</div>' : '';
         html += '<div class="roster-row"><span><span class="roster-name">' + escapeHtml(e.player) + '</span>' +
-          (e.comment ? '<div class="roster-comment">' + escapeHtml(e.comment) + '</div>' : '') + '</span>' +
+          (e.comment ? '<div class="roster-comment">' + escapeHtml(e.comment) + '</div>' : '') + wellness + '</span>' +
           '<span class="roster-status ' + e.status + '">' + statusLabel(e.status) + '</span></div>';
       });
       sr.pendingNames.forEach(function (n) {
@@ -1736,9 +1747,7 @@
     Array.prototype.forEach.call(list.querySelectorAll('[data-act="avail"]'), function (btn) {
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
-        var id = btn.getAttribute("data-id");
-        var existing = availability[id] && availability[id][slugify(identity.name)];
-        setAvailability(id, btn.getAttribute("data-status"), existing ? existing.comment : "");
+        setAvailability(btn.getAttribute("data-id"), btn.getAttribute("data-status"));
       });
     });
     Array.prototype.forEach.call(list.querySelectorAll('[data-act="comment"]'), function (input) {
@@ -1746,9 +1755,30 @@
       input.addEventListener("blur", function () {
         var id = input.getAttribute("data-id");
         var existing = availability[id] && availability[id][slugify(identity.name)];
-        if (!existing) return;
-        if ((existing.comment || "") === input.value.trim()) return;
-        setAvailability(id, existing.status, input.value.trim());
+        if (existing && (existing.comment || "") === input.value.trim()) return;
+        saveAvailabilityFields(id, { comment: input.value.trim() });
+      });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="mental"]'), function (input) {
+      input.addEventListener("click", function (e) { e.stopPropagation(); });
+      input.addEventListener("input", function () {
+        var id = input.getAttribute("data-id");
+        var out = list.querySelector('[data-role="mental-val-' + id + '"]');
+        if (out) out.textContent = input.value;
+      });
+      input.addEventListener("change", function () {
+        saveAvailabilityFields(input.getAttribute("data-id"), { mentalScore: parseInt(input.value, 10) });
+      });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="physical"]'), function (input) {
+      input.addEventListener("click", function (e) { e.stopPropagation(); });
+      input.addEventListener("input", function () {
+        var id = input.getAttribute("data-id");
+        var out = list.querySelector('[data-role="physical-val-' + id + '"]');
+        if (out) out.textContent = input.value;
+      });
+      input.addEventListener("change", function () {
+        saveAvailabilityFields(input.getAttribute("data-id"), { physicalScore: parseInt(input.value, 10) });
       });
     });
     Array.prototype.forEach.call(list.querySelectorAll('[data-act="edit"]'), function (btn) {

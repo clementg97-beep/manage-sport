@@ -1196,14 +1196,22 @@
 
   // ---------- email notifications (EmailJS, best-effort) ----------
   function sendNewSessionEmails(tid, session) {
-    if (typeof emailjs === "undefined" || !EMAILJS_CONFIG || EMAILJS_CONFIG.publicKey === "REMPLACE_MOI") return;
+    if (typeof emailjs === "undefined" || !EMAILJS_CONFIG || EMAILJS_CONFIG.publicKey === "REMPLACE_MOI") {
+      console.warn("[emailjs] EmailJS non configuré — aucun courriel envoyé.");
+      return;
+    }
     peopleCol(tid).where("role", "==", "joueur").get().then(function (snap) {
       var recipients = [];
       snap.docs.forEach(function (d) {
         var p = d.data();
         if (p && p.email) recipients.push(p);
+        else console.warn("[emailjs] Joueur sans courriel ignoré :", p && p.name);
       });
-      if (recipients.length === 0) return;
+      console.log("[emailjs] Destinataires trouvés :", recipients.length, recipients.map(function (p) { return p.email; }));
+      if (recipients.length === 0) {
+        toast("Aucun joueur avec courriel sur cette équipe — pas de courriel envoyé");
+        return;
+      }
       var teamName = teams[tid] ? teams[tid].name : "";
       var params = recipients.map(function (p) {
         return {
@@ -1216,19 +1224,23 @@
           coach_name: identity ? identity.name : ""
         };
       });
-      var sent = 0;
+      var sent = 0, failed = 0;
       function sendNext(i) {
         if (i >= params.length) {
-          if (sent > 0) toast("Séance créée — " + sent + " courriel(s) envoyé(s)");
+          if (sent > 0) toast(sent + " courriel(s) envoyé(s)" + (failed > 0 ? ", " + failed + " échec(s) — voir console (F12)" : ""));
+          else if (failed > 0) toast("Échec d'envoi des courriels — voir console (F12)");
           return;
         }
         emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.newSessionTemplateId, params[i])
-          .then(function () { sent++; })
-          .catch(function () { /* best-effort — un échec n'empêche pas les autres envois */ })
+          .then(function (res) { sent++; console.log("[emailjs] Envoyé à " + params[i].to_email, res); })
+          .catch(function (err) { failed++; console.error("[emailjs] Échec pour " + params[i].to_email, err); })
           .then(function () { setTimeout(function () { sendNext(i + 1); }, 300); });
       }
       sendNext(0);
-    }).catch(function () { /* best-effort */ });
+    }).catch(function (err) {
+      console.error("[emailjs] Erreur de lecture des joueurs de l'équipe", err);
+      toast("Erreur lors de la préparation des courriels — voir console (F12)");
+    });
   }
   function deleteSession(id) {
     if (!dbReady || !teamId) return;

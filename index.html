@@ -276,6 +276,11 @@
     padding: 12px; border-radius: var(--radius-md); text-align: center; cursor: pointer; font-weight: 700; font-size: 14px;
   }
   .role-opt.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .type-opt {
+    flex: 1; border: 1.5px solid var(--border); background: var(--bg-card); color: var(--text);
+    padding: 12px; border-radius: var(--radius-md); text-align: center; cursor: pointer; font-weight: 700; font-size: 14px;
+  }
+  .type-opt.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 
   .coach-picker { display: flex; flex-wrap: wrap; gap: 7px; }
   .coach-opt {
@@ -467,8 +472,11 @@
     <div class="sheet-handle"></div>
     <h2 id="sessionSheetTitle">Nouvelle séance</h2>
     <label class="field">
-      <span class="lbl">Intitulé</span>
-      <input type="text" id="fTitle" placeholder="Entraînement" maxlength="60">
+      <span class="lbl">Type de séance</span>
+      <div class="role-toggle">
+        <div class="type-opt sel" data-type="pratique">🏃 Pratique</div>
+        <div class="type-opt" data-type="match">🏆 Match</div>
+      </div>
     </label>
     <div class="row2">
       <label class="field">
@@ -500,6 +508,12 @@
       <span class="lbl">Coach(s) assigné(s)</span>
       <div class="coach-picker" id="coachPicker"></div>
     </label>
+    <div id="lineupSection" style="display:none;">
+      <h3>Alignement</h3>
+      <div class="hint" style="margin-top:-6px;">Optionnel — peut être rempli plus tard, une fois les disponibilités connues.</div>
+      <div class="row2" id="lineupGrid"></div>
+      <div class="hint" id="lineupBenchHint" style="margin-top:4px;">—</div>
+    </div>
     <label class="field">
       <span class="lbl">Notes (optionnel)</span>
       <textarea id="fNotes" placeholder="Infos utiles pour les joueurs..." maxlength="300"></textarea>
@@ -557,6 +571,16 @@
     { id: "saint-justin", name: "Saint-Justin", address: "8300 Rue De Teck, Montréal, QC H1L 1H4", lat: 45.5991874, lng: -73.5303825 }
   ];
 
+  var LINEUP_POSITIONS = [
+    { key: "passeur", label: "Passeur" },
+    { key: "technique", label: "Technique" },
+    { key: "r4_1", label: "R4 #1" },
+    { key: "r4_2", label: "R4 #2" },
+    { key: "central_1", label: "Central #1" },
+    { key: "central_2", label: "Central #2" },
+    { key: "libero", label: "Libéro" }
+  ];
+
   // ---------- utils ----------
   function slugify(str) {
     var s = (str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -590,6 +614,9 @@
   function isUrgent(s) {
     var h = hoursUntil(s);
     return h > 0 && h <= 6;
+  }
+  function sessionLabel(s) {
+    return s.type === "match" ? "Match" : "Pratique";
   }
   function initials(name) {
     return (name || "?").trim().slice(0,2).toUpperCase();
@@ -875,7 +902,7 @@
       var s = sessions[id];
       if (s.datetime < todayStr() + "T00:00") return;
       notifiedNewIds[id] = true;
-      maybeNotify("Nouvelle séance ajoutée", (s.title || "Entraînement") + " · " + fmtDateHeading(s.date) + " à " + s.time + " · " + (s.gymName || ""));
+      maybeNotify("Nouvelle séance ajoutée", sessionLabel(s) + " · " + fmtDateHeading(s.date) + " à " + s.time + " · " + (s.gymName || ""));
     });
   }
   var notifiedAvailIds = {};
@@ -889,7 +916,7 @@
         var key = sid + ":" + pslug + ":" + a.status + ":" + a.updatedAt;
         if (notifiedAvailIds[key]) return;
         notifiedAvailIds[key] = true;
-        maybeNotify(a.player + " a répondu", statusLabel(a.status) + " · " + (s.title || "Entraînement") + " " + s.date);
+        maybeNotify(a.player + " a répondu", statusLabel(a.status) + " · " + sessionLabel(s) + " " + s.date);
       });
     });
   }
@@ -928,11 +955,19 @@
 
   // ---------- session CRUD ----------
   var editingSessionId = null;
+  var selectedType = "pratique";
+  function setTypeSel(type) {
+    selectedType = type;
+    Array.prototype.forEach.call(document.querySelectorAll(".type-opt"), function (el) {
+      el.classList.toggle("sel", el.getAttribute("data-type") === type);
+    });
+    document.getElementById("lineupSection").style.display = type === "match" ? "block" : "none";
+  }
   function openSessionSheet(id) {
     editingSessionId = id || null;
     var s = id ? sessions[id] : null;
     document.getElementById("sessionSheetTitle").textContent = id ? "Modifier la séance" : "Nouvelle séance";
-    document.getElementById("fTitle").value = s ? (s.title || "") : "";
+    setTypeSel(s ? (s.type || "pratique") : "pratique");
     document.getElementById("fDate").value = s ? s.date : todayStr();
     document.getElementById("fTime").value = s ? s.time : "18:30";
     document.getElementById("fDuration").value = s ? s.duration : 90;
@@ -943,7 +978,54 @@
     renderGymSelect(s ? s.gymId : null);
     populateCourtList();
     populateCoachPicker(s ? s.coaches || [] : (identity ? [identity.name] : []));
+    populateLineupSelects(s ? s.lineup : null);
     document.getElementById("sessionOverlay").classList.add("show");
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".type-opt"), function (el) {
+    el.addEventListener("click", function () { setTypeSel(el.getAttribute("data-type")); });
+  });
+  function teamPlayerNames() {
+    return Object.keys(people).filter(function (k) { return people[k].role === "joueur"; })
+      .map(function (k) { return people[k].name; }).sort(function (a, b) { return a.localeCompare(b); });
+  }
+  function populateLineupSelects(existingLineup) {
+    var grid = document.getElementById("lineupGrid");
+    var names = teamPlayerNames();
+    var options = '<option value="">— Non assigné —</option>' + names.map(function (n) {
+      return '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>';
+    }).join("");
+    grid.innerHTML = LINEUP_POSITIONS.map(function (p) {
+      return '<label class="field"><span class="lbl">' + p.label + '</span>' +
+        '<select id="lineup_' + p.key + '" data-lineup-select>' + options + '</select></label>';
+    }).join("");
+    if (existingLineup) {
+      LINEUP_POSITIONS.forEach(function (p) {
+        var el = document.getElementById("lineup_" + p.key);
+        if (el && existingLineup[p.key]) el.value = existingLineup[p.key];
+      });
+    }
+    Array.prototype.forEach.call(grid.querySelectorAll("[data-lineup-select]"), function (sel) {
+      sel.addEventListener("change", updateLineupBenchHint);
+    });
+    updateLineupBenchHint();
+  }
+  function readLineupFromForm() {
+    var lineup = {};
+    LINEUP_POSITIONS.forEach(function (p) {
+      var el = document.getElementById("lineup_" + p.key);
+      lineup[p.key] = el ? el.value : "";
+    });
+    return lineup;
+  }
+  function updateLineupBenchHint() {
+    var assigned = LINEUP_POSITIONS.map(function (p) {
+      var el = document.getElementById("lineup_" + p.key);
+      return el ? el.value : "";
+    }).filter(Boolean);
+    var bench = teamPlayerNames().filter(function (n) { return assigned.indexOf(n) === -1; });
+    var hint = document.getElementById("lineupBenchHint");
+    if (!hint) return;
+    hint.textContent = bench.length ? ("Banc : " + bench.join(", ")) : "Tous les joueurs de l'équipe sont alignés.";
   }
   function renderGymSelect(selectedId) {
     var sel = document.getElementById("fGymSelect");
@@ -1004,7 +1086,7 @@
     var gym = gyms[gymId];
     if (!gymId || !gym) { toast("Choisis un gymnase (ou ajoute-en un via Administration)"); return; }
     var data = {
-      title: document.getElementById("fTitle").value.trim() || "Entraînement",
+      type: selectedType,
       date: date, time: time,
       datetime: date + "T" + time,
       duration: parseInt(document.getElementById("fDuration").value, 10) || 90,
@@ -1015,6 +1097,7 @@
       coaches: coachSelection,
       notes: document.getElementById("fNotes").value.trim(),
       link: document.getElementById("fLink").value.trim(),
+      lineup: selectedType === "match" ? readLineupFromForm() : null,
       createdBy: identity ? identity.name : "inconnu",
       updatedAt: new Date().toISOString()
     };
@@ -1043,7 +1126,7 @@
       var params = recipients.map(function (p) {
         return {
           to_name: p.name, to_email: p.email,
-          session_title: session.title || "Entraînement",
+          session_title: sessionLabel(session),
           session_date: fmtDateHeading(session.date),
           session_time: session.time,
           gym_name: session.gymName || "",
@@ -1301,11 +1384,25 @@
     html += '<div class="card-main" data-role="toggle-roster">';
     html += '<div class="card-time"><div class="hh">' + hh + '</div><div class="dur">' + s.duration + ' min</div></div>';
     html += '<div class="card-body">';
-    html += '<div class="card-title">' + escapeHtml(s.title || "Entraînement") + '</div>';
+    html += '<div class="card-title">' + escapeHtml(sessionLabel(s)) + '</div>';
     html += '<div class="card-meta"><span>📍 ' + escapeHtml(s.gymName || "") + '</span>' + (s.court ? '<span>· ' + escapeHtml(s.court) + '</span>' : '') + '</div>';
     html += '<div class="card-coaches">🧑‍🏫 ' + escapeHtml(coachesLabel) + '</div>';
     if (s.notes) html += '<div class="card-coaches">📎 ' + escapeHtml(s.notes) + '</div>';
     html += '</div></div>';
+
+    if (s.type === "match" && s.lineup) {
+      var filledPositions = LINEUP_POSITIONS.filter(function (p) { return s.lineup[p.key]; });
+      if (filledPositions.length) {
+        html += '<div class="roster open" style="border-top:1px solid var(--border);">';
+        filledPositions.forEach(function (p) {
+          html += '<div class="roster-row"><span class="roster-name">' + p.label + '</span><span style="font-weight:700;">' + escapeHtml(s.lineup[p.key]) + '</span></div>';
+        });
+        html += '</div>';
+        var assignedNames = filledPositions.map(function (p) { return s.lineup[p.key]; });
+        var bench = teamPlayerNames().filter(function (n) { return assignedNames.indexOf(n) === -1; });
+        if (bench.length) html += '<div class="card-coaches" style="padding:0 14px 10px;">🪑 Banc : ' + escapeHtml(bench.join(", ")) + '</div>';
+      }
+    }
 
     if (gym && gym.lat && gym.lng) {
       html += '<div class="map-embed" id="map-' + s.id + '" data-lat="' + gym.lat + '" data-lng="' + gym.lng + '"></div>';
@@ -1455,7 +1552,7 @@
     if (identity && teamId && effectiveRole() === "joueur") {
       pendingSessionsForPlayer().forEach(function (id) {
         var s = sessions[id];
-        items.push({ t: "Réponse attendue", m: (s.title||"Entraînement") + " · " + s.date + " " + s.time + " · " + (s.gymName||"") });
+        items.push({ t: "Réponse attendue", m: sessionLabel(s) + " · " + s.date + " " + s.time + " · " + (s.gymName||"") });
       });
     }
     if (identity && teamId && canManageTeam()) {
@@ -1464,7 +1561,7 @@
         if (s.datetime < todayStr() + "T00:00" || !isCoachOf(s)) return;
         var sr = statAndRoster(id);
         if (sr.pendingCount > 0) {
-          items.push({ t: sr.pendingCount + " joueur(s) sans réponse", m: (s.title||"Entraînement") + " · " + s.date + " " + s.time });
+          items.push({ t: sr.pendingCount + " joueur(s) sans réponse", m: sessionLabel(s) + " · " + s.date + " " + s.time });
         }
       });
     }

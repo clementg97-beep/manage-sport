@@ -102,9 +102,27 @@
   .brand-logo { height: 26px; width: auto; display: block; }
   .brand-sub { font-size: 12px; color: var(--text-muted); font-weight: 500; }
   .team-chip {
-    display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border);
-    background: var(--bg-card); color: var(--text); border-radius: 999px; padding: 5px 12px;
-    font-size: 12px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--accent);
+    background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 8px 16px;
+    font-size: 14px; font-weight: 800; cursor: pointer;
+  }
+  .team-banner {
+    position: relative; height: 120px; border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 14px; cursor: pointer; background: var(--bg-card) center/cover no-repeat;
+  }
+  .team-banner::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(15,18,24,0.05) 0%, rgba(15,18,24,0.75) 100%);
+  }
+  .team-banner-label {
+    position: absolute; left: 16px; right: 16px; bottom: 12px; z-index: 1;
+    color: #FFFFFF; font-size: 17px; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .team-banner-sub {
+    position: absolute; right: 14px; top: 12px; z-index: 1;
+    background: rgba(15,18,24,0.45); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 4px 10px; border-radius: 999px;
   }
   .top-actions { display: flex; align-items: center; gap: 8px; }
   .icon-btn {
@@ -233,11 +251,12 @@
 
   .fab {
     position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-    width: 58px; height: 58px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
-    border: none; font-size: 26px; box-shadow: 0 6px 20px rgba(0,0,0,0.25); cursor: pointer;
-    display: flex; align-items: center; justify-content: center; z-index: 25;
+    height: 52px; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+    border: none; font-size: 15px; font-weight: 800; box-shadow: 0 6px 20px rgba(0,0,0,0.25); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px; z-index: 25;
+    padding: 0 20px; white-space: nowrap;
   }
-  .fab:active { transform: scale(0.94); }
+  .fab:active { transform: scale(0.96); }
 
   .overlay {
     position: fixed; inset: 0; background: rgba(10,12,16,0.5); z-index: 50;
@@ -376,6 +395,8 @@
     Connexion à la base de données impossible. Vérifie que firebase-config.js contient bien la configuration de ton projet Firebase (voir les commentaires dans ce fichier), et que les règles Firestore sont publiées.
   </div>
 
+  <div id="teamBanner" class="team-banner" style="display:none;"></div>
+
   <div id="actionBanner"></div>
 
   <div class="tabs">
@@ -386,7 +407,7 @@
   <div id="sessionList"></div>
 </main>
 
-<button class="fab" id="fabAdd" style="display:none;" title="Nouvelle séance">+</button>
+<button class="fab" id="fabAdd" style="display:none;" title="Nouvelle séance">+ Ajouter un événement</button>
 
 <!-- Onboarding / identity sheet -->
 <div class="overlay" id="onboardOverlay">
@@ -430,10 +451,9 @@
     <div id="teamList"></div>
     <div id="teamCreateBox" style="display:none;">
       <h3>Nouvelle équipe</h3>
-      <div class="inline-add">
-        <input type="text" id="newTeamName" placeholder="Ex. U16 Féminin" maxlength="50">
-        <button type="button" id="newTeamAdd">Créer</button>
-      </div>
+      <input type="text" id="newTeamName" placeholder="Ex. U16 Féminin" maxlength="50" style="margin-bottom:8px;">
+      <input type="url" id="newTeamPhoto" placeholder="URL photo (optionnel — sinon photo par défaut)" maxlength="300" style="margin-bottom:8px;">
+      <button type="button" id="newTeamAdd" class="btn-primary" style="margin-top:0;">Créer</button>
     </div>
     <button class="btn-secondary" id="teamOverlayClose">Fermer</button>
   </div>
@@ -1270,9 +1290,9 @@
   }
 
   // ---------- admin actions ----------
-  function addTeam(name) {
+  function addTeam(name, photoUrl) {
     if (!dbReady) return;
-    teamsCol().add({ name: name, createdAt: new Date().toISOString(), createdBy: identity ? identity.name : "" })
+    teamsCol().add({ name: name, photoUrl: photoUrl || "", createdAt: new Date().toISOString(), createdBy: identity ? identity.name : "" })
       .then(function (ref) { toast("Équipe créée"); selectTeam(ref.id); })
       .catch(function () { toast("Erreur de création"); });
   }
@@ -1311,7 +1331,27 @@
     var locked = !isAdmin && myAssignment && myAssignment.teamId;
     document.getElementById("teamChipArrow").style.display = locked ? "none" : "inline";
     chip.title = locked ? "Équipe assignée par l'administrateur" : "";
+    renderTeamBanner();
   }
+  function renderTeamBanner() {
+    var el = document.getElementById("teamBanner");
+    var team = teamId ? teams[teamId] : null;
+    if (!identity || !team) { el.style.display = "none"; return; }
+    el.style.display = "block";
+    el.style.backgroundImage = 'url("' + (team.photoUrl || "default-banner.jpg") + '")';
+    el.innerHTML = '<div class="team-banner-label">👥 ' + escapeHtml(team.name) + '</div>' +
+      (isAdmin ? '<div class="team-banner-sub">✏️ Photo</div>' : '');
+  }
+  document.getElementById("teamBanner").addEventListener("click", function () {
+    if (isAdmin && teamId && teams[teamId]) {
+      var url = prompt("URL de la photo pour \"" + teams[teamId].name + "\" (laisser vide pour la photo par défaut) :", teams[teamId].photoUrl || "");
+      if (url === null) return;
+      teamsCol().doc(teamId).update({ photoUrl: url.trim() }).catch(function () { toast("Erreur"); });
+      return;
+    }
+    if (!isAdmin && myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe — demande-lui."); return; }
+    openTeamOverlay();
+  });
   function renderTeamList() {
     var el = document.getElementById("teamList");
     var ids = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
@@ -1784,10 +1824,11 @@
   document.getElementById("teamOverlayClose").addEventListener("click", closeTeamOverlay);
   document.getElementById("newTeamAdd").addEventListener("click", function () {
     var input = document.getElementById("newTeamName");
+    var photoInput = document.getElementById("newTeamPhoto");
     var name = input.value.trim();
     if (!name) { toast("Entre un nom d'équipe"); return; }
-    addTeam(name);
-    input.value = "";
+    addTeam(name, photoInput.value.trim());
+    input.value = ""; photoInput.value = "";
   });
   document.getElementById("identityChip").addEventListener("click", function () {
     document.getElementById("onboardTitle").textContent = "Ton profil";

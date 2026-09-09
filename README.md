@@ -1,4 +1,4 @@
-# Créneau
+# Manage-sport
 
 App mobile pour Everton Volleyball : planification des séances par équipe,
 disponibilités des joueurs, gestion des coachs par un administrateur, et

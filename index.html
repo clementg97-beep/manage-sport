@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Manage-sport</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#1D3557">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -96,7 +98,8 @@
   }
   .brand-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .brand { display: flex; align-items: baseline; gap: 8px; }
-  .brand-mark { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-mark { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+  .brand-logo { height: 26px; width: auto; display: block; }
   .brand-sub { font-size: 12px; color: var(--text-muted); font-weight: 500; }
   .team-chip {
     display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border);
@@ -349,7 +352,7 @@
 <div class="topbar">
   <div class="brand-group">
     <div class="brand">
-      <span class="brand-mark">🏐 Manage-sport</span>
+      <span class="brand-mark"><img class="brand-logo" src="logo.png" alt="Everton Volleyball"> Manage-sport</span>
     </div>
     <button class="team-chip" id="teamChip" style="display:none;">👥 <span id="teamChipName">—</span><span id="teamChipArrow"> ▾</span></button>
   </div>

@@ -346,7 +346,7 @@
     <div class="brand">
       <span class="brand-mark">🏐 Créneau</span>
     </div>
-    <button class="team-chip" id="teamChip" style="display:none;">👥 <span id="teamChipName">—</span> ▾</button>
+    <button class="team-chip" id="teamChip" style="display:none;">👥 <span id="teamChipName">—</span><span id="teamChipArrow"> ▾</span></button>
   </div>
   <div class="top-actions">
     <button class="icon-btn" id="adminBtn" title="Administration" style="display:none;">⚙️</button>
@@ -453,6 +453,10 @@
     </div>
     <div id="gymList2"></div>
 
+    <h3>Membres (toutes équipes)</h3>
+    <div class="hint" style="margin-top:-4px;">Joueurs et coachs sont verrouillés sur leur équipe une fois assignés — change leur équipe ici si besoin.</div>
+    <div id="membersList"></div>
+
     <button class="btn-secondary" id="adminClose">Fermer</button>
   </div>
 </div>
@@ -499,6 +503,10 @@
     <label class="field">
       <span class="lbl">Notes (optionnel)</span>
       <textarea id="fNotes" placeholder="Infos utiles pour les joueurs..." maxlength="300"></textarea>
+    </label>
+    <label class="field">
+      <span class="lbl">Lien vers un fichier (optionnel)</span>
+      <input type="url" id="fLink" placeholder="Ex. lien Google Drive du détail du tournoi" maxlength="300">
     </label>
     <button class="btn-primary" id="sessionSave">Enregistrer</button>
     <button class="btn-secondary" id="sessionCancel">Annuler</button>
@@ -575,6 +583,14 @@
     var d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   }
+  function hoursUntil(s) {
+    var start = new Date(s.date + "T" + s.time + ":00");
+    return (start - new Date()) / 3600000;
+  }
+  function isUrgent(s) {
+    var h = hoursUntil(s);
+    return h > 0 && h <= 6;
+  }
   function initials(name) {
     return (name || "?").trim().slice(0,2).toUpperCase();
   }
@@ -604,6 +620,9 @@
   var teamUnsubs = [];
   var leafletMaps = {};
   var gymSeedAttempted = false;
+  var myAssignment = null;       // {name, teamId} — this device's locked team, from Firestore (non-admin only)
+  var myAssignmentUnsub = null;
+  var allAssignments = {};       // slug -> {name, teamId} — for the admin "Membres" panel
 
   // ---------- identity / admin / team persistence ----------
   function loadIdentity() {
@@ -622,6 +641,7 @@
       if (isAdmin) localStorage.setItem("creneau_admin", "1");
     } catch (e) {}
     upsertPerson();
+    if (dbReady) subscribeMyAssignment();
     renderAll();
   }
   function saveTeamId(id) {
@@ -668,6 +688,7 @@
   function sessionsCol(tid) { return db.collection("teams/" + tid + "/sessions"); }
   function availCol(tid) { return db.collection("teams/" + tid + "/availability"); }
   function peopleCol(tid) { return db.collection("teams/" + tid + "/people"); }
+  function assignmentsCol() { return db.collection("assignments"); }
 
   // ---------- geocoding (best-effort, only for gyms an admin adds without coords) ----------
   function geocodeAndSave(gymId, address) {
@@ -701,11 +722,21 @@
       teams = next;
       renderTeamChip();
       renderTeamList();
+      renderAdminMembersList();
       renderAll();
-      if (identity && !teamId) openTeamOverlay();
+      if (identity && isAdmin && !teamId) openTeamOverlay();
     }, function () {
       document.getElementById("offlineNote").style.display = "block";
     });
+
+    assignmentsCol().onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
+      allAssignments = next;
+      renderAdminMembersList();
+    }, function () { /* degrade quietly */ });
+
+    if (identity) subscribeMyAssignment();
 
     gymsCol().onSnapshot(function (snap) {
       var next = {};
@@ -792,6 +823,33 @@
     renderAll();
   }
 
+  // Joueurs et coachs sont verrouillés sur l'équipe que Firestore leur
+  // assigne (collection "assignments") — seul l'admin peut la changer,
+  // depuis Administration. Le tout premier choix reste libre.
+  function subscribeMyAssignment() {
+    if (myAssignmentUnsub) { try { myAssignmentUnsub(); } catch (e) {} myAssignmentUnsub = null; }
+    if (!dbReady || !identity || isAdmin) { myAssignment = null; renderTeamChip(); return; }
+    var slug = slugify(identity.name);
+    myAssignmentUnsub = assignmentsCol().doc(slug).onSnapshot(function (snap) {
+      myAssignment = snap.exists ? snap.data() : null;
+      if (myAssignment && myAssignment.teamId && myAssignment.teamId !== teamId) {
+        selectTeam(myAssignment.teamId);
+      } else if (!myAssignment && !teamId) {
+        openTeamOverlay();
+      }
+      renderTeamChip();
+    }, function () { /* degrade quietly */ });
+  }
+  function chooseTeam(id) {
+    if (!isAdmin) {
+      if (myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe."); return; }
+      assignmentsCol().doc(slugify(identity.name)).set({
+        name: identity.name, teamId: id, updatedAt: new Date().toISOString(), updatedBy: identity.name
+      }).catch(function () {});
+    }
+    selectTeam(id);
+  }
+
   // ---------- notifications (best-effort, foreground only) ----------
   function maybeNotify(title, body) {
     if (typeof Notification === "undefined") return;
@@ -868,6 +926,7 @@
     document.getElementById("fDuration").value = s ? s.duration : 90;
     document.getElementById("fCourt").value = s ? s.court : "";
     document.getElementById("fNotes").value = s ? (s.notes || "") : "";
+    document.getElementById("fLink").value = s ? (s.link || "") : "";
 
     renderGymSelect(s ? s.gymId : null);
     populateCourtList();
@@ -943,6 +1002,7 @@
       court: document.getElementById("fCourt").value.trim(),
       coaches: coachSelection,
       notes: document.getElementById("fNotes").value.trim(),
+      link: document.getElementById("fLink").value.trim(),
       createdBy: identity ? identity.name : "inconnu",
       updatedAt: new Date().toISOString()
     };
@@ -1050,6 +1110,9 @@
     if (!identity) { chip.style.display = "none"; return; }
     chip.style.display = "inline-flex";
     document.getElementById("teamChipName").textContent = (teamId && teams[teamId]) ? teams[teamId].name : "Choisir…";
+    var locked = !isAdmin && myAssignment && myAssignment.teamId;
+    document.getElementById("teamChipArrow").style.display = locked ? "none" : "inline";
+    chip.title = locked ? "Équipe assignée par l'administrateur" : "";
   }
   function renderTeamList() {
     var el = document.getElementById("teamList");
@@ -1061,7 +1124,7 @@
         return '<button type="button" class="team-row' + (id === teamId ? ' active' : '') + '" data-team="' + id + '">' + escapeHtml(teams[id].name) + (id === teamId ? ' ✓' : '') + '</button>';
       }).join("");
       Array.prototype.forEach.call(el.querySelectorAll(".team-row"), function (btn) {
-        btn.addEventListener("click", function () { selectTeam(btn.getAttribute("data-team")); });
+        btn.addEventListener("click", function () { chooseTeam(btn.getAttribute("data-team")); });
       });
     }
     document.getElementById("teamCreateBox").style.display = isAdmin ? "block" : "none";
@@ -1104,10 +1167,34 @@
       btn.addEventListener("click", function () { removeGym(btn.getAttribute("data-id")); });
     });
   }
+  function renderAdminMembersList() {
+    var el = document.getElementById("membersList");
+    if (!el) return;
+    var slugs = Object.keys(allAssignments).sort(function (a, b) { return allAssignments[a].name.localeCompare(allAssignments[b].name); });
+    var teamIds = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
+    if (slugs.length === 0) { el.innerHTML = '<div class="empty-mini">Personne n\'a encore rejoint d\'équipe.</div>'; return; }
+    el.innerHTML = slugs.map(function (slug) {
+      var a = allAssignments[slug];
+      var options = teamIds.map(function (tid) {
+        return '<option value="' + tid + '"' + (tid === a.teamId ? " selected" : "") + '>' + escapeHtml(teams[tid].name) + '</option>';
+      }).join("");
+      return '<div class="list-row"><span class="lr-main">' + escapeHtml(a.name) + '</span>' +
+        '<select data-slug="' + slug + '" style="width:auto; padding:6px 8px; font-size:12.5px;">' + options + '</select></div>';
+    }).join("");
+    Array.prototype.forEach.call(el.querySelectorAll("select[data-slug]"), function (sel) {
+      sel.addEventListener("change", function () {
+        var slug = sel.getAttribute("data-slug");
+        assignmentsCol().doc(slug).update({ teamId: sel.value, updatedAt: new Date().toISOString(), updatedBy: identity ? identity.name : "" })
+          .then(function () { toast("Équipe mise à jour pour " + allAssignments[slug].name); })
+          .catch(function () { toast("Erreur"); });
+      });
+    });
+  }
   function openAdminOverlay() {
     document.getElementById("adminTeamHint").textContent = teamId && teams[teamId] ? ("Équipe active : " + teams[teamId].name) : "Choisis d'abord une équipe.";
     renderAdminCoachList();
     renderAdminGymList();
+    renderAdminMembersList();
     document.getElementById("adminOverlay").classList.add("show");
   }
 
@@ -1138,6 +1225,20 @@
     });
     return count;
   }
+  function urgentPendingForCoach() {
+    if (!identity || effectiveRole() !== "coach" || !teamId) return 0;
+    var players = Object.keys(people).filter(function (k) { return people[k].role === "joueur"; });
+    var count = 0;
+    Object.keys(sessions).forEach(function (id) {
+      var s = sessions[id];
+      if (!isUrgent(s)) return;
+      if (!isCoachOf(s)) return;
+      var answered = availability[id] ? Object.keys(availability[id]) : [];
+      var missing = players.filter(function (p) { return answered.indexOf(p) === -1; });
+      if (missing.length > 0) count++;
+    });
+    return count;
+  }
   function renderBanner() {
     var el = document.getElementById("actionBanner");
     if (!identity || !teamId) { el.innerHTML = ""; return; }
@@ -1146,9 +1247,13 @@
       html += '<div class="banner warn"><span class="banner-icon">⏳</span>Rôle Coach en attente d\'autorisation pour cette équipe — tu es affiché comme Joueur. Demande à l\'administrateur de t\'ajouter.</div>';
     }
     if (effectiveRole() === "joueur") {
+      var urgentIds = pendingSessionsForPlayer().filter(function (id) { return isUrgent(sessions[id]); });
+      if (urgentIds.length > 0) html += '<div class="banner warn"><span class="banner-icon">⏰</span>' + (urgentIds.length === 1 ? "1 séance dans moins de 6h attend ta réponse !" : urgentIds.length + " séances dans moins de 6h attendent ta réponse !") + '</div>';
       var n = pendingSessionsForPlayer().length;
       if (n > 0) html += '<div class="banner"><span class="banner-icon">📝</span>' + (n === 1 ? "1 séance attend ta réponse." : n + " séances attendent ta réponse.") + '</div>';
     } else if (effectiveRole() === "coach") {
+      var u = urgentPendingForCoach();
+      if (u > 0) html += '<div class="banner warn"><span class="banner-icon">⏰</span>' + (u === 1 ? "1 séance dans moins de 6h a des joueurs sans réponse." : u + " séances dans moins de 6h ont des joueurs sans réponse.") + '</div>';
       var c = pendingForCoach();
       if (c > 0) html += '<div class="banner"><span class="banner-icon">👀</span>' + (c === 1 ? "1 séance a des joueurs sans réponse." : c + " séances ont des joueurs sans réponse.") + '</div>';
     }
@@ -1196,8 +1301,15 @@
       html += '<button type="button" class="map-link" data-act="dir" data-id="' + s.id + '">🚌 Itinéraire depuis ma position</button>';
       html += '</div>';
     }
+    if (s.link) {
+      html += '<div class="map-row" style="padding-top:0;"><a href="' + escapeHtml(s.link) + '" target="_blank" rel="noopener" class="map-link" style="text-decoration:none;">📎 Voir les détails (fichier / lien)</a></div>';
+    }
 
+    var urgent = !isPast && isUrgent(s);
     if (role === "joueur" && !isPast) {
+      if (urgent && !myStatus) {
+        html += '<div class="banner warn" style="margin:0 14px 10px;"><span class="banner-icon">⏰</span>Séance dans moins de 6h — réponds vite !</div>';
+      }
       html += '<div class="chips-row">';
       ["dispo","peutetre","indispo"].forEach(function (st) {
         var sel = myStatus && myStatus.status === st;
@@ -1207,7 +1319,7 @@
       html += '</div>';
     }
 
-    if (role === "coach") {
+    if (role === "coach" || role === "joueur") {
       var sr = statAndRoster(s.id);
       html += '<div class="stat-row">';
       if (sr.counts.dispo) html += '<span class="pill dispo">' + sr.counts.dispo + ' dispo</span>';
@@ -1224,10 +1336,13 @@
           '<span class="roster-status ' + e.status + '">' + statusLabel(e.status) + '</span></div>';
       });
       sr.pendingNames.forEach(function (n) {
-        html += '<div class="roster-row"><span class="roster-name">' + escapeHtml(n) + '</span><span class="roster-status">Sans réponse</span></div>';
+        var flag = (urgent && !isPast) ? ' style="color:var(--indispo);"' : '';
+        html += '<div class="roster-row"><span class="roster-name"' + flag + '>' + (urgent ? '⚠️ ' : '') + escapeHtml(n) + '</span><span class="roster-status"' + flag + '>Sans réponse</span></div>';
       });
       html += '</div>';
+    }
 
+    if (role === "coach") {
       html += '<div class="card-tools">';
       html += '<button class="link-btn" data-act="edit" data-id="' + s.id + '">Modifier</button>';
       html += '<button class="link-btn danger" data-act="delete" data-id="' + s.id + '">Supprimer</button>';
@@ -1276,7 +1391,7 @@
     Array.prototype.forEach.call(list.querySelectorAll('[data-role="toggle-roster"]'), function (el) {
       el.addEventListener("click", function () {
         var id = el.parentElement.getAttribute("data-id");
-        if (effectiveRole() !== "coach") return;
+        if (effectiveRole() !== "coach" && effectiveRole() !== "joueur") return;
         openRosterIds[id] = !openRosterIds[id];
         renderAll();
       });
@@ -1391,7 +1506,10 @@
     addGym(name, address);
     nameInput.value = ""; addrInput.value = "";
   });
-  document.getElementById("teamChip").addEventListener("click", function () { openTeamOverlay(); });
+  document.getElementById("teamChip").addEventListener("click", function () {
+    if (!isAdmin && myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe — demande-lui."); return; }
+    openTeamOverlay();
+  });
   document.getElementById("teamOverlayClose").addEventListener("click", closeTeamOverlay);
   document.getElementById("newTeamAdd").addEventListener("click", function () {
     var input = document.getElementById("newTeamName");
@@ -1424,6 +1542,7 @@
     try { localStorage.removeItem("creneau_admin"); } catch (e) {}
     toast("Mode administrateur désactivé sur cet appareil");
     document.getElementById("onboardOverlay").classList.remove("show");
+    if (dbReady) subscribeMyAssignment();
     renderAll();
   });
   var selectedRole = "joueur";

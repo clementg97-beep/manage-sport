@@ -1,4 +1,4 @@
-# Créneau
+# Manage-sport
 
 App mobile pour Everton Volleyball : planification des séances par équipe,
 disponibilités des joueurs, gestion des coachs par un administrateur, et
@@ -44,7 +44,7 @@ quelques minutes plus tard à `https://<ton-compte>.github.io/<ton-repo>/`.
 ## 3. Premier lancement
 
 1. Ouvre l'URL GitHub Pages sur ton téléphone.
-2. Entre ton nom exact (`Clément Gustin`), clique **"Je suis
+2. Entre ton nom exact, clique **"Je suis
    l'administrateur du club"**, code `2026`.
 3. Crée ta première équipe depuis le sélecteur en haut.
 4. Dans **Administration** (⚙️) : ajoute les coachs autorisés pour cette

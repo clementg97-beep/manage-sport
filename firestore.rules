@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// Ces règles reproduisent le même modèle de confiance que la version
+// précédente (pas de vrai login — l'admin du club est reconnu par un
+// nom + code dans l'app elle-même, pas par ces règles). Toute personne
+// ayant le lien de l'app peut lire et écrire les données. C'est adapté
+// à un club interne, pas à une donnée sensible.
+//
+// Si tu veux durcir ça plus tard (vraie authentification Firebase),
+// dis-le et on adaptera ces règles + l'app.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Créneau</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1D3557">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Créneau">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg: #EEF1F6;
+    --bg-card: #FFFFFF;
+    --bg-raised: #FFFFFF;
+    --text: #171A21;
+    --text-muted: #5B6472;
+    --border: #DBE1EA;
+    --accent: #1D3557;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #E4EAF4;
+    --dispo: #21895E;
+    --dispo-soft: #E1F3EA;
+    --peutetre: #B4790E;
+    --peutetre-soft: #FBF0DC;
+    --indispo: #C1443C;
+    --indispo-soft: #FBE6E4;
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(23,26,33,0.06), 0 6px 16px rgba(23,26,33,0.06);
+    --font: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F1218;
+      --bg-card: #171B24;
+      --bg-raised: #1D222D;
+      --text: #EDEFF3;
+      --text-muted: #97A0B0;
+      --border: #2A2F3B;
+      --accent: #7C9CCB;
+      --accent-ink: #0F1218;
+      --accent-soft: #1E2A40;
+      --dispo: #4FBE8F;
+      --dispo-soft: #163227;
+      --peutetre: #E4B767;
+      --peutetre-soft: #3A2E13;
+      --indispo: #E17169;
+      --indispo-soft: #3A1917;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F1218;
+    --bg-card: #171B24;
+    --bg-raised: #1D222D;
+    --text: #EDEFF3;
+    --text-muted: #97A0B0;
+    --border: #2A2F3B;
+    --accent: #7C9CCB;
+    --accent-ink: #0F1218;
+    --accent-soft: #1E2A40;
+    --dispo: #4FBE8F;
+    --dispo-soft: #163227;
+    --peutetre: #E4B767;
+    --peutetre-soft: #3A2E13;
+    --indispo: #E17169;
+    --indispo-soft: #3A1917;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font); -webkit-font-smoothing: antialiased;
+  }
+  body { min-height: 100vh; padding-bottom: 96px; }
+  button { font-family: var(--font); }
+  ::selection { background: var(--accent-soft); }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 14px 16px calc(14px + env(safe-area-inset-top, 0px));
+    padding-top: max(14px, env(safe-area-inset-top));
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .brand-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand-mark { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .brand-sub { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .team-chip {
+    display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border);
+    background: var(--bg-card); color: var(--text); border-radius: 999px; padding: 5px 12px;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .top-actions { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    position: relative; border: 1px solid var(--border); background: var(--bg-card);
+    color: var(--text); width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font-size: 16px; padding: 0;
+  }
+  .icon-btn:active { transform: scale(0.94); }
+  .badge-dot {
+    position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px;
+    background: var(--indispo); color: #fff; border-radius: 999px; font-size: 10px;
+    font-weight: 800; display: flex; align-items: center; justify-content: center;
+    padding: 0 4px; border: 2px solid var(--bg);
+  }
+  .identity-chip {
+    display: flex; align-items: center; gap: 8px; border: 1px solid var(--border);
+    background: var(--bg-card); border-radius: 999px; padding: 6px 12px 6px 6px;
+    cursor: pointer;
+  }
+  .avatar {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+    color: var(--accent-ink); font-size: 12px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .identity-chip .name { font-size: 13px; font-weight: 700; line-height: 1.1; }
+  .identity-chip .role { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: none; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 14px 16px 24px; }
+
+  .banner {
+    display: flex; align-items: center; gap: 10px; background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    color: var(--text); border-radius: var(--radius-md); padding: 12px 14px;
+    margin-bottom: 14px; font-size: 13.5px; font-weight: 600; line-height: 1.4;
+  }
+  .banner.warn { background: var(--peutetre-soft); border-color: color-mix(in srgb, var(--peutetre) 30%, var(--border)); }
+  .banner-icon { font-size: 17px; flex-shrink: 0; }
+
+  .tabs {
+    display: flex; gap: 4px; background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px; margin-bottom: 16px;
+  }
+  .tab {
+    flex: 1; border: none; background: transparent; color: var(--text-muted);
+    padding: 8px 10px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    cursor: pointer;
+  }
+  .tab.active { background: var(--accent); color: var(--accent-ink); }
+
+  .date-heading {
+    font-size: 12.5px; font-weight: 800; color: var(--text-muted); text-transform: capitalize;
+    margin: 20px 2px 8px; letter-spacing: 0.01em;
+  }
+  .date-heading:first-child { margin-top: 0; }
+
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow); margin-bottom: 10px; overflow: hidden;
+  }
+  .card-main { display: flex; padding: 14px; gap: 12px; cursor: pointer; }
+  .card-time {
+    flex-shrink: 0; width: 54px; text-align: center; padding-top: 1px;
+  }
+  .card-time .hh { font-size: 18px; font-weight: 800; line-height: 1.1; }
+  .card-time .dur { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+  .card-body { flex: 1; min-width: 0; }
+  .card-title { font-size: 15px; font-weight: 700; margin: 0 0 3px; }
+  .card-meta { font-size: 12.5px; color: var(--text-muted); font-weight: 500; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .card-meta span { display: inline-flex; align-items: center; gap: 3px; }
+  .card-coaches { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .map-embed { height: 150px; margin: 0 14px 10px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); background: var(--bg); }
+  .map-row { display: flex; gap: 14px; padding: 0 14px 12px; }
+  .map-link {
+    border: none; background: none; color: var(--accent); font-size: 12px;
+    font-weight: 700; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 4px;
+  }
+
+  .chips-row { display: flex; gap: 6px; padding: 0 14px 14px; flex-wrap: wrap; }
+  .chip {
+    border: 1.5px solid var(--border); background: transparent; color: var(--text);
+    padding: 7px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+    cursor: pointer; flex: 1; min-width: 84px;
+  }
+  .chip.dispo.sel { background: var(--dispo-soft); border-color: var(--dispo); color: var(--dispo); }
+  .chip.peutetre.sel { background: var(--peutetre-soft); border-color: var(--peutetre); color: var(--peutetre); }
+  .chip.indispo.sel { background: var(--indispo-soft); border-color: var(--indispo); color: var(--indispo); }
+
+  .stat-row { display: flex; gap: 6px; padding: 0 14px 14px; flex-wrap: wrap; }
+  .pill { font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
+  .pill.dispo { background: var(--dispo-soft); color: var(--dispo); }
+  .pill.peutetre { background: var(--peutetre-soft); color: var(--peutetre); }
+  .pill.indispo { background: var(--indispo-soft); color: var(--indispo); }
+  .pill.pending { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+
+  .roster {
+    border-top: 1px solid var(--border); padding: 10px 14px 14px; display: none;
+  }
+  .roster.open { display: block; }
+  .roster-row {
+    display: flex; align-items: center; justify-content: space-between; padding: 7px 0;
+    font-size: 13px; border-bottom: 1px dashed var(--border);
+  }
+  .roster-row:last-child { border-bottom: none; }
+  .roster-name { font-weight: 600; }
+  .roster-comment { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+  .roster-status { font-size: 11.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
+  .roster-status.dispo { background: var(--dispo-soft); color: var(--dispo); }
+  .roster-status.peutetre { background: var(--peutetre-soft); color: var(--peutetre); }
+  .roster-status.indispo { background: var(--indispo-soft); color: var(--indispo); }
+
+  .card-tools { display: flex; gap: 8px; padding: 0 14px 14px; }
+  .link-btn {
+    border: none; background: none; color: var(--text-muted); font-size: 12px;
+    font-weight: 700; cursor: pointer; padding: 4px 0;
+  }
+  .link-btn.danger { color: var(--indispo); }
+
+  .empty {
+    text-align: center; padding: 56px 20px; color: var(--text-muted);
+  }
+  .empty .e-icon { font-size: 34px; margin-bottom: 10px; }
+  .empty .e-title { font-weight: 700; color: var(--text); margin-bottom: 4px; font-size: 15px; }
+  .empty .e-sub { font-size: 13px; line-height: 1.5; }
+
+  .fab {
+    position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: 58px; height: 58px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    border: none; font-size: 26px; box-shadow: 0 6px 20px rgba(0,0,0,0.25); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; z-index: 25;
+  }
+  .fab:active { transform: scale(0.94); }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(10,12,16,0.5); z-index: 50;
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .overlay.show { display: flex; }
+  @media (min-width: 640px) { .overlay { align-items: center; } }
+
+  .sheet {
+    background: var(--bg-raised); width: 100%; max-width: 520px;
+    border-radius: 20px 20px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+    max-height: 90vh; overflow-y: auto;
+  }
+  @media (min-width: 640px) { .sheet { border-radius: 20px; max-height: 86vh; } }
+  .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 4px; margin: 0 auto 14px; }
+  .sheet h2 { font-size: 18px; margin: 0 0 16px; font-weight: 800; }
+  .sheet h3 { font-size: 13px; margin: 18px 0 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .sheet h3:first-of-type { margin-top: 0; }
+
+  label.field { display: block; margin-bottom: 14px; }
+  label.field .lbl { display: block; font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+  input[type=text], input[type=date], input[type=time], input[type=number], input[type=password], textarea, select {
+    width: 100%; border: 1.5px solid var(--border); background: var(--bg-card); color: var(--text);
+    border-radius: var(--radius-md); padding: 11px 12px; font-size: 15px; font-family: var(--font);
+  }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  textarea { resize: vertical; min-height: 60px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .inline-add { display: flex; gap: 8px; margin-bottom: 10px; }
+  .inline-add input { flex: 1; }
+  .inline-add button {
+    border: none; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius-md);
+    padding: 0 16px; font-weight: 800; font-size: 14px; cursor: pointer;
+  }
+
+  .role-toggle { display: flex; gap: 8px; }
+  .role-opt {
+    flex: 1; border: 1.5px solid var(--border); background: var(--bg-card); color: var(--text);
+    padding: 12px; border-radius: var(--radius-md); text-align: center; cursor: pointer; font-weight: 700; font-size: 14px;
+  }
+  .role-opt.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+  .coach-picker { display: flex; flex-wrap: wrap; gap: 7px; }
+  .coach-opt {
+    border: 1.5px solid var(--border); background: var(--bg-card); color: var(--text);
+    padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .coach-opt.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+  .btn-primary {
+    width: 100%; background: var(--accent); color: var(--accent-ink); border: none;
+    padding: 14px; border-radius: var(--radius-md); font-size: 15px; font-weight: 800; cursor: pointer;
+    margin-top: 4px;
+  }
+  .btn-primary:active { transform: scale(0.99); }
+  .btn-secondary {
+    width: 100%; background: transparent; color: var(--text-muted); border: 1.5px solid var(--border);
+    padding: 12px; border-radius: var(--radius-md); font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px;
+  }
+  .hint { font-size: 12px; color: var(--text-muted); margin-top: -8px; margin-bottom: 14px; line-height: 1.4; }
+  .text-link {
+    background: none; border: none; color: var(--accent); font-size: 12.5px; font-weight: 700;
+    cursor: pointer; padding: 0; margin: -6px 0 14px; text-decoration: underline;
+  }
+
+  .notif-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+  .notif-item { padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.4; }
+  .notif-item .t { font-weight: 700; }
+  .notif-item .m { color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
+
+  .list-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 4px; border-bottom: 1px dashed var(--border); font-size: 13.5px;
+  }
+  .list-row:last-child { border-bottom: none; }
+  .list-row .lr-main { font-weight: 700; }
+  .list-row .lr-sub { font-size: 11.5px; color: var(--text-muted); font-weight: 500; margin-top: 1px; }
+  .list-row .lr-del {
+    border: none; background: none; color: var(--indispo); font-size: 12px; font-weight: 700; cursor: pointer;
+    flex-shrink: 0;
+  }
+  .team-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; text-align: left; border: 1.5px solid var(--border); background: var(--bg-card);
+    border-radius: var(--radius-md); padding: 13px 14px; margin-bottom: 8px; cursor: pointer;
+    font-size: 14.5px; font-weight: 700; color: var(--text);
+  }
+  .team-row.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .empty-mini { font-size: 13px; color: var(--text-muted); text-align: center; padding: 18px 6px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 999px;
+    font-size: 13px; font-weight: 700; opacity: 0; pointer-events: none; transition: all 0.25s ease; z-index: 80;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .offline-note {
+    background: var(--indispo-soft); color: var(--indispo); border-radius: var(--radius-md);
+    padding: 12px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px;
+  }
+  a.reset-link { color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand-group">
+    <div class="brand">
+      <span class="brand-mark">🏐 Créneau</span>
+    </div>
+    <button class="team-chip" id="teamChip" style="display:none;">👥 <span id="teamChipName">—</span> ▾</button>
+  </div>
+  <div class="top-actions">
+    <button class="icon-btn" id="adminBtn" title="Administration" style="display:none;">⚙️</button>
+    <button class="icon-btn" id="bellBtn" title="Notifications">
+      🔔<span class="badge-dot" id="bellBadge" style="display:none;">0</span>
+    </button>
+    <button class="identity-chip" id="identityChip">
+      <span class="avatar" id="avatarInit">?</span>
+      <span>
+        <span class="name" id="chipName">—</span><br>
+        <span class="role" id="chipRole">—</span>
+      </span>
+    </button>
+  </div>
+</div>
+
+<main>
+  <div id="offlineNote" class="offline-note" style="display:none;">
+    Connexion à la base de données impossible. Vérifie que firebase-config.js contient bien la configuration de ton projet Firebase (voir les commentaires dans ce fichier), et que les règles Firestore sont publiées.
+  </div>
+
+  <div id="actionBanner"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="upcoming">À venir</button>
+    <button class="tab" data-tab="past">Passées</button>
+  </div>
+
+  <div id="sessionList"></div>
+</main>
+
+<button class="fab" id="fabAdd" style="display:none;" title="Nouvelle séance">+</button>
+
+<!-- Onboarding / identity sheet -->
+<div class="overlay" id="onboardOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="onboardTitle">Bienvenue 👋</h2>
+    <label class="field">
+      <span class="lbl">Ton prénom et nom</span>
+      <input type="text" id="onboardName" placeholder="Ex. Clément Gustin" maxlength="40">
+    </label>
+    <label class="field">
+      <span class="lbl">Ton rôle souhaité</span>
+      <div class="role-toggle">
+        <div class="role-opt sel" data-role="joueur">🏃 Joueur</div>
+        <div class="role-opt" data-role="coach">📋 Coach</div>
+      </div>
+    </label>
+    <div class="hint">Le rôle Coach doit être autorisé par l'administrateur pour chaque équipe — sinon tu restes Joueur en attendant.</div>
+    <button type="button" class="text-link" id="adminModeLink">Je suis l'administrateur du club</button>
+    <label class="field" id="onboardPinField" style="display:none;">
+      <span class="lbl">Code administrateur</span>
+      <input type="password" id="onboardPin" inputmode="numeric" placeholder="Code à 4 chiffres" maxlength="6">
+    </label>
+    <button class="btn-primary" id="onboardSave">C'est parti</button>
+    <button class="btn-secondary" id="onboardCancel" style="display:none;">Annuler</button>
+  </div>
+</div>
+
+<!-- Team picker sheet -->
+<div class="overlay" id="teamOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Choisis ton équipe</h2>
+    <div id="teamList"></div>
+    <div id="teamCreateBox" style="display:none;">
+      <h3>Nouvelle équipe</h3>
+      <div class="inline-add">
+        <input type="text" id="newTeamName" placeholder="Ex. U16 Féminin" maxlength="50">
+        <button type="button" id="newTeamAdd">Créer</button>
+      </div>
+    </div>
+    <button class="btn-secondary" id="teamOverlayClose">Fermer</button>
+  </div>
+</div>
+
+<!-- Admin panel sheet -->
+<div class="overlay" id="adminOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Administration</h2>
+    <div class="hint" id="adminTeamHint" style="margin-top:-10px;">—</div>
+
+    <h3>Coachs autorisés pour cette équipe</h3>
+    <div class="inline-add">
+      <input type="text" id="newCoachName" placeholder="Nom du coach" maxlength="40">
+      <button type="button" id="newCoachAdd">Ajouter</button>
+    </div>
+    <div id="coachWhitelistList"></div>
+
+    <h3>Gymnases (partagés entre équipes)</h3>
+    <div class="inline-add" style="flex-direction:column; align-items:stretch;">
+      <input type="text" id="newGymName" placeholder="Nom du gymnase" maxlength="60" style="margin-bottom:8px;">
+      <input type="text" id="newGymAddress" placeholder="Adresse complète" maxlength="120" style="margin-bottom:8px;">
+      <button type="button" id="newGymAdd">Ajouter le gymnase</button>
+    </div>
+    <div id="gymList2"></div>
+
+    <button class="btn-secondary" id="adminClose">Fermer</button>
+  </div>
+</div>
+
+<!-- Session create/edit sheet -->
+<div class="overlay" id="sessionOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="sessionSheetTitle">Nouvelle séance</h2>
+    <label class="field">
+      <span class="lbl">Intitulé</span>
+      <input type="text" id="fTitle" placeholder="Entraînement" maxlength="60">
+    </label>
+    <div class="row2">
+      <label class="field">
+        <span class="lbl">Date</span>
+        <input type="date" id="fDate">
+      </label>
+      <label class="field">
+        <span class="lbl">Heure</span>
+        <input type="time" id="fTime">
+      </label>
+    </div>
+    <label class="field">
+      <span class="lbl">Durée (minutes)</span>
+      <input type="number" id="fDuration" value="90" min="15" step="15">
+    </label>
+    <div class="row2">
+      <label class="field">
+        <span class="lbl">Gymnase</span>
+        <select id="fGymSelect"></select>
+      </label>
+      <label class="field">
+        <span class="lbl">Terrain</span>
+        <input type="text" id="fCourt" list="courtList" placeholder="Ex. Terrain 2" maxlength="40">
+        <datalist id="courtList"></datalist>
+      </label>
+    </div>
+    <div class="hint" id="noGymHint" style="display:none;">Aucun gymnase enregistré — demande à un administrateur d'en ajouter un depuis Administration (⚙️).</div>
+    <label class="field">
+      <span class="lbl">Coach(s) assigné(s)</span>
+      <div class="coach-picker" id="coachPicker"></div>
+    </label>
+    <label class="field">
+      <span class="lbl">Notes (optionnel)</span>
+      <textarea id="fNotes" placeholder="Infos utiles pour les joueurs..." maxlength="300"></textarea>
+    </label>
+    <button class="btn-primary" id="sessionSave">Enregistrer</button>
+    <button class="btn-secondary" id="sessionCancel">Annuler</button>
+  </div>
+</div>
+
+<!-- Notifications sheet -->
+<div class="overlay" id="notifOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Notifications</h2>
+    <div class="notif-list" id="notifList"></div>
+    <div class="hint" style="margin-top:14px;">
+      Les alertes s'affichent tant que Créneau reste ouvert sur ton téléphone (pas de notification si l'app est complètement fermée).
+      <span id="notifPermRow"></span>
+    </div>
+    <button class="btn-secondary" id="notifClose">Fermer</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+  "use strict";
+
+  // ---------- config ----------
+  var ADMIN_NAME = "Clément Gustin";
+  var ADMIN_PIN = "2026";
+
+  // Pré-remplissage des gymnases connus (Everton Volleyball) — écrit une seule
+  // fois si la collection "gyms" est vide au tout premier lancement.
+  var DEFAULT_GYMS = [
+    { id: "college-maisonneuve", name: "Collège Maisonneuve", address: "2701 Rue Nicolet, Montréal, QC H1X 1Z8", lat: 45.5490988, lng: -73.5527492 },
+    { id: "ets", name: "Centre sportif ÉTS", address: "1111 Rue Notre-Dame O, Montréal, QC H3C 0B1", lat: 45.4945155, lng: -73.5628555 },
+    { id: "hingston", name: "Centre Sportif William-Hingston", address: "419 Rue Saint-Roch, Montréal, QC H3N 1K2", lat: 45.5319967, lng: -73.6298827 },
+    { id: "ecole-barclay", name: "École Barclay", address: "7941 Av. Wiseman, Montréal, QC H3N 2P2", lat: 45.5288822, lng: -73.6348075 },
+    { id: "gadbois", name: "Centre Sportif Gadbois", address: "5485 Chemin de la Côte-Saint-Paul, Montréal, QC H4C 1X3", lat: 45.4671731, lng: -73.5947381 },
+    { id: "pierre-laporte", name: "École Pierre-Laporte", address: "955 Chemin Rockland, Mont-Royal, QC H3P 2X8", lat: 45.5229767, lng: -73.6350889 },
+    { id: "georges-vanier", name: "Georges-Vanier", address: "1205 Rue Jarry E, Montréal, QC H2P 1W9", lat: 45.5500319, lng: -73.6249571 },
+    { id: "uqam", name: "Centre-Ville (Centre Sportif UQAM)", address: "1212 Rue Sanguinet, Montréal, QC H2X 0A6", lat: 45.5119702, lng: -73.5599848 },
+    { id: "saint-justin", name: "Saint-Justin", address: "8300 Rue De Teck, Montréal, QC H1L 1H4", lat: 45.5991874, lng: -73.5303825 }
+  ];
+
+  // ---------- utils ----------
+  function slugify(str) {
+    var s = (str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    return s || ("id-" + Math.random().toString(36).slice(2, 9));
+  }
+  function toast(msg) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+  function fmtDateHeading(dateStr) {
+    var today = new Date(); today.setHours(0,0,0,0);
+    var d = new Date(dateStr + "T00:00:00");
+    var diffDays = Math.round((d - today) / 86400000);
+    var weekday = new Intl.DateTimeFormat("fr-FR", { weekday: "long" }).format(d);
+    var full = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" }).format(d);
+    if (diffDays === 0) return "Aujourd'hui · " + full;
+    if (diffDays === 1) return "Demain · " + full;
+    return weekday.charAt(0).toUpperCase() + weekday.slice(1) + " " + full;
+  }
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+  function initials(name) {
+    return (name || "?").trim().slice(0,2).toUpperCase();
+  }
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, function (c) {
+      return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+    });
+  }
+
+  // ---------- state ----------
+  var identity = null;      // {name, role} — role is the DECLARED preference
+  var isAdmin = false;
+  var teamId = null;
+  var teams = {};           // id -> {name}
+  var gyms = {};            // id -> {name, address, lat, lng}
+  var sessions = {};        // id -> doc (current team)
+  var availability = {};    // sessionId -> { playerSlug: {...} }
+  var people = {};          // slug -> {name, role} (current team)
+  var coachWhitelist = {};  // slug -> {name} (current team)
+  var currentTab = "upcoming";
+  var openRosterIds = {};
+  var db = null;
+  var dbReady = false;
+  var notifiedNewIds = {};
+  var initialSessionLoad = true;
+  var initialAvailLoad = true;
+  var teamUnsubs = [];
+  var leafletMaps = {};
+  var gymSeedAttempted = false;
+
+  // ---------- identity / admin / team persistence ----------
+  function loadIdentity() {
+    try {
+      var raw = localStorage.getItem("creneau_identity");
+      if (raw) identity = JSON.parse(raw);
+      isAdmin = localStorage.getItem("creneau_admin") === "1";
+      teamId = localStorage.getItem("creneau_team") || null;
+    } catch (e) {}
+  }
+  function saveIdentity(name, role, adminUnlocked) {
+    identity = { name: name, role: role };
+    if (adminUnlocked) isAdmin = true;
+    try {
+      localStorage.setItem("creneau_identity", JSON.stringify(identity));
+      if (isAdmin) localStorage.setItem("creneau_admin", "1");
+    } catch (e) {}
+    upsertPerson();
+    renderAll();
+  }
+  function saveTeamId(id) {
+    teamId = id;
+    try { localStorage.setItem("creneau_team", id); } catch (e) {}
+  }
+  function upsertPerson() {
+    if (!dbReady || !teamId || !identity) return;
+    var slug = slugify(identity.name);
+    peopleCol(teamId).doc(slug).set({ name: identity.name, role: identity.role, updatedAt: new Date().toISOString() })
+      .catch(function () {});
+  }
+  function effectiveRole() {
+    if (!identity) return null;
+    if (isAdmin) return "coach";
+    if (identity.role !== "coach") return "joueur";
+    return coachWhitelist[slugify(identity.name)] ? "coach" : "joueur";
+  }
+  function isPendingCoach() {
+    return !!identity && identity.role === "coach" && !isAdmin && effectiveRole() !== "coach";
+  }
+  function isCoachOf(s) {
+    return effectiveRole() === "coach" && s.coaches && s.coaches.indexOf(identity.name) !== -1;
+  }
+  function statusLabel(st) {
+    return st === "dispo" ? "Disponible" : st === "peutetre" ? "Peut-être" : st === "indispo" ? "Indisponible" : "Sans réponse";
+  }
+
+  function renderIdentity() {
+    if (!identity) return;
+    document.getElementById("chipName").textContent = identity.name;
+    var role = effectiveRole();
+    var roleLabel = role === "coach" ? "Coach" : (isPendingCoach() ? "Joueur (coach en attente)" : "Joueur");
+    document.getElementById("chipRole").textContent = roleLabel;
+    document.getElementById("avatarInit").textContent = initials(identity.name);
+    document.getElementById("fabAdd").style.display = (role === "coach" && teamId) ? "flex" : "none";
+    document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
+  }
+
+  // ---------- db path helpers ----------
+  function teamsCol() { return db.collection("teams"); }
+  function gymsCol() { return db.collection("gyms"); }
+  function coachesCol(tid) { return db.collection("teams/" + tid + "/coaches"); }
+  function sessionsCol(tid) { return db.collection("teams/" + tid + "/sessions"); }
+  function availCol(tid) { return db.collection("teams/" + tid + "/availability"); }
+  function peopleCol(tid) { return db.collection("teams/" + tid + "/people"); }
+
+  // ---------- geocoding (best-effort, only for gyms an admin adds without coords) ----------
+  function geocodeAndSave(gymId, address) {
+    var url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address);
+    fetch(url, { headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (arr) {
+        if (!arr || !arr[0]) return;
+        return gymsCol().doc(gymId).update({ lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon) });
+      })
+      .catch(function () { /* best-effort — la carte restera juste absente pour ce gymnase */ });
+  }
+
+  // ---------- db wiring ----------
+  function initDb() {
+    try {
+      db = firebase.firestore();
+    } catch (e) { db = null; }
+    if (!db) {
+      document.getElementById("offlineNote").style.display = "block";
+      dbReady = false;
+      renderAll();
+      return;
+    }
+    dbReady = true;
+    document.getElementById("offlineNote").style.display = "none";
+
+    teamsCol().onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
+      teams = next;
+      renderTeamChip();
+      renderTeamList();
+      renderAll();
+      if (identity && !teamId) openTeamOverlay();
+    }, function () {
+      document.getElementById("offlineNote").style.display = "block";
+    });
+
+    gymsCol().onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
+      gyms = next;
+      if (!gymSeedAttempted && snap.empty) {
+        gymSeedAttempted = true;
+        seedDefaultGyms();
+      }
+      renderGymSelect();
+      renderAdminGymList();
+      renderAll();
+    }, function () { /* degrade quietly */ });
+
+    if (teamId) subscribeTeam(teamId);
+  }
+
+  function seedDefaultGyms() {
+    var batch = db.batch();
+    DEFAULT_GYMS.forEach(function (g) {
+      batch.set(gymsCol().doc(g.id), {
+        name: g.name, address: g.address, lat: g.lat, lng: g.lng,
+        addedBy: "Seed initial", addedAt: new Date().toISOString()
+      });
+    });
+    batch.commit().catch(function () { /* une autre session a peut-être déjà semé les données */ });
+  }
+
+  function unsubscribeTeam() {
+    teamUnsubs.forEach(function (u) { try { u(); } catch (e) {} });
+    teamUnsubs = [];
+  }
+  function subscribeTeam(tid) {
+    unsubscribeTeam();
+    sessions = {}; availability = {}; people = {}; coachWhitelist = {};
+    initialSessionLoad = true; initialAvailLoad = true;
+
+    teamUnsubs.push(sessionsCol(tid).orderBy("datetime").onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
+      sessions = next;
+      checkNewSessionNotifications();
+      initialSessionLoad = false;
+      renderAll();
+    }, function () { /* degrade quietly */ }));
+
+    teamUnsubs.push(availCol(tid).onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) {
+        var v = d.data();
+        if (!v || !v.sessionId) return;
+        if (!next[v.sessionId]) next[v.sessionId] = {};
+        next[v.sessionId][slugify(v.player)] = v;
+      });
+      availability = next;
+      checkNewAvailabilityNotifications();
+      initialAvailLoad = false;
+      renderAll();
+    }, function () { /* degrade quietly */ }));
+
+    teamUnsubs.push(peopleCol(tid).onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { next[d.id] = d.data(); });
+      people = next;
+      renderAll();
+    }, function () { /* degrade quietly */ }));
+
+    teamUnsubs.push(coachesCol(tid).onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { next[d.id] = d.data(); });
+      coachWhitelist = next;
+      renderAdminCoachList();
+      renderAll();
+    }, function () { /* degrade quietly */ }));
+  }
+
+  function selectTeam(id) {
+    saveTeamId(id);
+    if (dbReady) subscribeTeam(id);
+    upsertPerson();
+    renderTeamChip();
+    renderTeamList();
+    closeTeamOverlay();
+    renderAll();
+  }
+
+  // ---------- notifications (best-effort, foreground only) ----------
+  function maybeNotify(title, body) {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "granted") return;
+    try { new Notification(title, { body: body, tag: "creneau-" + Date.now() }); } catch (e) {}
+  }
+  function checkNewSessionNotifications() {
+    if (initialSessionLoad || !identity || effectiveRole() !== "joueur") return;
+    Object.keys(sessions).forEach(function (id) {
+      if (notifiedNewIds[id]) return;
+      var s = sessions[id];
+      if (s.datetime < todayStr() + "T00:00") return;
+      notifiedNewIds[id] = true;
+      maybeNotify("Nouvelle séance ajoutée", (s.title || "Entraînement") + " · " + fmtDateHeading(s.date) + " à " + s.time + " · " + (s.gymName || ""));
+    });
+  }
+  var notifiedAvailIds = {};
+  function checkNewAvailabilityNotifications() {
+    if (initialAvailLoad || !identity || effectiveRole() !== "coach") return;
+    Object.keys(availability).forEach(function (sid) {
+      var s = sessions[sid];
+      if (!s || !isCoachOf(s)) return;
+      Object.keys(availability[sid]).forEach(function (pslug) {
+        var a = availability[sid][pslug];
+        var key = sid + ":" + pslug + ":" + a.status + ":" + a.updatedAt;
+        if (notifiedAvailIds[key]) return;
+        notifiedAvailIds[key] = true;
+        maybeNotify(a.player + " a répondu", statusLabel(a.status) + " · " + (s.title || "Entraînement") + " " + s.date);
+      });
+    });
+  }
+
+  // ---------- maps / directions ----------
+  function gymQuery(gym) {
+    return encodeURIComponent((gym.name || "") + ", " + (gym.address || ""));
+  }
+  function openMap(gym) {
+    window.open("https://www.google.com/maps/search/?api=1&query=" + gymQuery(gym), "_blank");
+  }
+  function openDirections(gym) {
+    if (!navigator.geolocation) { openMap(gym); return; }
+    toast("Localisation en cours…");
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var origin = pos.coords.latitude + "," + pos.coords.longitude;
+      window.open("https://www.google.com/maps/dir/?api=1&origin=" + origin + "&destination=" + gymQuery(gym) + "&travelmode=transit", "_blank");
+    }, function () {
+      toast("Position indisponible — ouverture de la carte");
+      openMap(gym);
+    }, { timeout: 8000 });
+  }
+  function initCardMaps() {
+    Object.keys(leafletMaps).forEach(function (k) { try { leafletMaps[k].remove(); } catch (e) {} });
+    leafletMaps = {};
+    document.querySelectorAll(".map-embed[data-lat]").forEach(function (el) {
+      var lat = parseFloat(el.getAttribute("data-lat"));
+      var lng = parseFloat(el.getAttribute("data-lng"));
+      if (isNaN(lat) || isNaN(lng) || typeof L === "undefined") return;
+      var map = L.map(el, { attributionControl: false, scrollWheelZoom: false }).setView([lat, lng], 15);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+      L.marker([lat, lng]).addTo(map);
+      leafletMaps[el.id] = map;
+    });
+  }
+
+  // ---------- session CRUD ----------
+  var editingSessionId = null;
+  function openSessionSheet(id) {
+    editingSessionId = id || null;
+    var s = id ? sessions[id] : null;
+    document.getElementById("sessionSheetTitle").textContent = id ? "Modifier la séance" : "Nouvelle séance";
+    document.getElementById("fTitle").value = s ? (s.title || "") : "";
+    document.getElementById("fDate").value = s ? s.date : todayStr();
+    document.getElementById("fTime").value = s ? s.time : "18:30";
+    document.getElementById("fDuration").value = s ? s.duration : 90;
+    document.getElementById("fCourt").value = s ? s.court : "";
+    document.getElementById("fNotes").value = s ? (s.notes || "") : "";
+
+    renderGymSelect(s ? s.gymId : null);
+    populateCourtList();
+    populateCoachPicker(s ? s.coaches || [] : (identity ? [identity.name] : []));
+    document.getElementById("sessionOverlay").classList.add("show");
+  }
+  function renderGymSelect(selectedId) {
+    var sel = document.getElementById("fGymSelect");
+    if (!sel) return;
+    var ids = Object.keys(gyms).sort(function (a, b) { return gyms[a].name.localeCompare(gyms[b].name); });
+    document.getElementById("noGymHint").style.display = ids.length === 0 ? "block" : "none";
+    sel.innerHTML = ids.map(function (id) {
+      return '<option value="' + id + '">' + escapeHtml(gyms[id].name) + '</option>';
+    }).join("");
+    if (selectedId && gyms[selectedId]) sel.value = selectedId;
+  }
+  function populateCourtList() {
+    var courts = {};
+    Object.keys(sessions).forEach(function (id) {
+      var s = sessions[id];
+      if (s.court) courts[s.court] = 1;
+    });
+    document.getElementById("courtList").innerHTML = Object.keys(courts).map(function (c) { return '<option value="' + escapeHtml(c) + '">'; }).join("");
+  }
+  var coachSelection = [];
+  function populateCoachPicker(preselected) {
+    coachSelection = preselected.slice();
+    var coachList = Object.keys(coachWhitelist).map(function (k) { return coachWhitelist[k]; });
+    if (isAdmin && identity && !coachList.find(function (p) { return p.name === identity.name; })) {
+      coachList.push({ name: identity.name });
+    }
+    var seen = {};
+    coachList = coachList.filter(function (p) { if (seen[p.name]) return false; seen[p.name] = 1; return true; });
+    var el = document.getElementById("coachPicker");
+    if (coachList.length === 0) {
+      el.innerHTML = '<div class="hint" style="margin:0;">Aucun coach autorisé pour l\'instant — ajoute-en depuis Administration (⚙️).</div>';
+      coachSelection = [];
+      return;
+    }
+    el.innerHTML = coachList.map(function (p) {
+      var sel = coachSelection.indexOf(p.name) !== -1;
+      return '<div class="coach-opt' + (sel ? ' sel' : '') + '" data-name="' + escapeHtml(p.name) + '">' + escapeHtml(p.name) + '</div>';
+    }).join("");
+    Array.prototype.forEach.call(el.querySelectorAll(".coach-opt"), function (btn) {
+      btn.addEventListener("click", function () {
+        var n = btn.getAttribute("data-name");
+        var idx = coachSelection.indexOf(n);
+        if (idx === -1) coachSelection.push(n); else coachSelection.splice(idx, 1);
+        btn.classList.toggle("sel");
+      });
+    });
+  }
+  function closeSessionSheet() {
+    document.getElementById("sessionOverlay").classList.remove("show");
+    editingSessionId = null;
+  }
+  function saveSession() {
+    if (!teamId) { toast("Choisis d'abord une équipe"); return; }
+    var date = document.getElementById("fDate").value;
+    var time = document.getElementById("fTime").value;
+    if (!date || !time) { toast("Date et heure requises"); return; }
+    var gymId = document.getElementById("fGymSelect").value;
+    var gym = gyms[gymId];
+    if (!gymId || !gym) { toast("Choisis un gymnase (ou ajoute-en un via Administration)"); return; }
+    var data = {
+      title: document.getElementById("fTitle").value.trim() || "Entraînement",
+      date: date, time: time,
+      datetime: date + "T" + time,
+      duration: parseInt(document.getElementById("fDuration").value, 10) || 90,
+      gymId: gymId,
+      gymName: gym.name,
+      gymAddress: gym.address,
+      court: document.getElementById("fCourt").value.trim(),
+      coaches: coachSelection,
+      notes: document.getElementById("fNotes").value.trim(),
+      createdBy: identity ? identity.name : "inconnu",
+      updatedAt: new Date().toISOString()
+    };
+    if (!dbReady) { toast("Sauvegarde indisponible — vérifie la configuration Firebase"); return; }
+    var p = editingSessionId
+      ? sessionsCol(teamId).doc(editingSessionId).update(data).then(function () { toast("Séance mise à jour"); })
+      : (function () { data.createdAt = new Date().toISOString(); return sessionsCol(teamId).add(data).then(function () { toast("Séance créée"); }); })();
+    p.then(closeSessionSheet).catch(function () { toast("Erreur d'enregistrement"); });
+  }
+  function deleteSession(id) {
+    if (!dbReady || !teamId) return;
+    if (!confirm("Supprimer cette séance ?")) return;
+    sessionsCol(teamId).doc(id).delete().then(function () { toast("Séance supprimée"); })
+      .catch(function () { toast("Erreur de suppression"); });
+  }
+
+  // ---------- availability ----------
+  function setAvailability(sessionId, status) {
+    if (!identity || !teamId) return;
+    if (!dbReady) { toast("Réponse indisponible — vérifie la configuration Firebase"); return; }
+    var docId = sessionId + "_" + slugify(identity.name);
+    availCol(teamId).doc(docId).set({
+      sessionId: sessionId, player: identity.name, status: status,
+      updatedAt: new Date().toISOString()
+    }).catch(function () { toast("Erreur d'enregistrement"); });
+  }
+
+  // ---------- admin actions ----------
+  function addTeam(name) {
+    if (!dbReady) return;
+    teamsCol().add({ name: name, createdAt: new Date().toISOString(), createdBy: identity ? identity.name : "" })
+      .then(function (ref) { toast("Équipe créée"); selectTeam(ref.id); })
+      .catch(function () { toast("Erreur de création"); });
+  }
+  function addCoachToWhitelist(name) {
+    if (!dbReady || !teamId) return;
+    var slug = slugify(name);
+    coachesCol(teamId).doc(slug).set({ name: name, addedBy: identity ? identity.name : "", addedAt: new Date().toISOString() })
+      .then(function () { toast("Coach ajouté"); })
+      .catch(function () { toast("Erreur"); });
+  }
+  function removeCoachFromWhitelist(slug) {
+    if (!dbReady || !teamId) return;
+    coachesCol(teamId).doc(slug).delete().then(function () { toast("Coach retiré"); })
+      .catch(function () { toast("Erreur"); });
+  }
+  function addGym(name, address) {
+    if (!dbReady) return;
+    var slug = slugify(name);
+    gymsCol().doc(slug).set({ name: name, address: address, addedBy: identity ? identity.name : "", addedAt: new Date().toISOString() })
+      .then(function () { toast("Gymnase ajouté — repérage sur la carte en cours…"); geocodeAndSave(slug, address); })
+      .catch(function () { toast("Erreur"); });
+  }
+  function removeGym(id) {
+    if (!dbReady) return;
+    if (!confirm("Supprimer ce gymnase ?")) return;
+    gymsCol().doc(id).delete().then(function () { toast("Gymnase supprimé"); })
+      .catch(function () { toast("Erreur"); });
+  }
+
+  // ---------- rendering: team picker ----------
+  function renderTeamChip() {
+    var chip = document.getElementById("teamChip");
+    if (!identity) { chip.style.display = "none"; return; }
+    chip.style.display = "inline-flex";
+    document.getElementById("teamChipName").textContent = (teamId && teams[teamId]) ? teams[teamId].name : "Choisir…";
+  }
+  function renderTeamList() {
+    var el = document.getElementById("teamList");
+    var ids = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
+    if (ids.length === 0) {
+      el.innerHTML = '<div class="empty-mini">' + (isAdmin ? "Aucune équipe pour l'instant — crée la première ci-dessous." : "Aucune équipe pour l'instant — demande à l'administrateur d'en créer une.") + '</div>';
+    } else {
+      el.innerHTML = ids.map(function (id) {
+        return '<button type="button" class="team-row' + (id === teamId ? ' active' : '') + '" data-team="' + id + '">' + escapeHtml(teams[id].name) + (id === teamId ? ' ✓' : '') + '</button>';
+      }).join("");
+      Array.prototype.forEach.call(el.querySelectorAll(".team-row"), function (btn) {
+        btn.addEventListener("click", function () { selectTeam(btn.getAttribute("data-team")); });
+      });
+    }
+    document.getElementById("teamCreateBox").style.display = isAdmin ? "block" : "none";
+  }
+  function openTeamOverlay() {
+    renderTeamList();
+    document.getElementById("teamOverlay").classList.add("show");
+  }
+  function closeTeamOverlay() {
+    document.getElementById("teamOverlay").classList.remove("show");
+  }
+
+  // ---------- rendering: admin panel ----------
+  function renderAdminCoachList() {
+    var el = document.getElementById("coachWhitelistList");
+    if (!el) return;
+    var slugs = Object.keys(coachWhitelist);
+    if (slugs.length === 0) { el.innerHTML = '<div class="empty-mini">Aucun coach autorisé pour cette équipe.</div>'; return; }
+    el.innerHTML = slugs.map(function (slug) {
+      var c = coachWhitelist[slug];
+      return '<div class="list-row"><span class="lr-main">' + escapeHtml(c.name) + '</span>' +
+        '<button type="button" class="lr-del" data-slug="' + slug + '">Retirer</button></div>';
+    }).join("");
+    Array.prototype.forEach.call(el.querySelectorAll(".lr-del"), function (btn) {
+      btn.addEventListener("click", function () { removeCoachFromWhitelist(btn.getAttribute("data-slug")); });
+    });
+  }
+  function renderAdminGymList() {
+    var el = document.getElementById("gymList2");
+    if (!el) return;
+    var ids = Object.keys(gyms).sort(function (a, b) { return gyms[a].name.localeCompare(gyms[b].name); });
+    if (ids.length === 0) { el.innerHTML = '<div class="empty-mini">Aucun gymnase enregistré.</div>'; return; }
+    el.innerHTML = ids.map(function (id) {
+      var g = gyms[id];
+      return '<div class="list-row"><span><span class="lr-main">' + escapeHtml(g.name) + '</span>' +
+        '<div class="lr-sub">' + escapeHtml(g.address || "") + (g.lat ? "" : " · position non repérée") + '</div></span>' +
+        '<button type="button" class="lr-del" data-id="' + id + '">Retirer</button></div>';
+    }).join("");
+    Array.prototype.forEach.call(el.querySelectorAll(".lr-del"), function (btn) {
+      btn.addEventListener("click", function () { removeGym(btn.getAttribute("data-id")); });
+    });
+  }
+  function openAdminOverlay() {
+    document.getElementById("adminTeamHint").textContent = teamId && teams[teamId] ? ("Équipe active : " + teams[teamId].name) : "Choisis d'abord une équipe.";
+    renderAdminCoachList();
+    renderAdminGymList();
+    document.getElementById("adminOverlay").classList.add("show");
+  }
+
+  // ---------- rendering: app ----------
+  function pendingSessionsForPlayer() {
+    if (!identity || effectiveRole() !== "joueur" || !teamId) return [];
+    var slug = slugify(identity.name);
+    var now = todayStr() + "T00:00";
+    return Object.keys(sessions).filter(function (id) {
+      var s = sessions[id];
+      if (s.datetime < now) return false;
+      var a = availability[id] && availability[id][slug];
+      return !a;
+    });
+  }
+  function pendingForCoach() {
+    if (!identity || effectiveRole() !== "coach" || !teamId) return 0;
+    var now = todayStr() + "T00:00";
+    var players = Object.keys(people).filter(function (k) { return people[k].role === "joueur"; });
+    var count = 0;
+    Object.keys(sessions).forEach(function (id) {
+      var s = sessions[id];
+      if (s.datetime < now) return;
+      if (!isCoachOf(s)) return;
+      var answered = availability[id] ? Object.keys(availability[id]) : [];
+      var missing = players.filter(function (p) { return answered.indexOf(p) === -1; });
+      if (missing.length > 0) count++;
+    });
+    return count;
+  }
+  function renderBanner() {
+    var el = document.getElementById("actionBanner");
+    if (!identity || !teamId) { el.innerHTML = ""; return; }
+    var html = "";
+    if (isPendingCoach()) {
+      html += '<div class="banner warn"><span class="banner-icon">⏳</span>Rôle Coach en attente d\'autorisation pour cette équipe — tu es affiché comme Joueur. Demande à l\'administrateur de t\'ajouter.</div>';
+    }
+    if (effectiveRole() === "joueur") {
+      var n = pendingSessionsForPlayer().length;
+      if (n > 0) html += '<div class="banner"><span class="banner-icon">📝</span>' + (n === 1 ? "1 séance attend ta réponse." : n + " séances attendent ta réponse.") + '</div>';
+    } else if (effectiveRole() === "coach") {
+      var c = pendingForCoach();
+      if (c > 0) html += '<div class="banner"><span class="banner-icon">👀</span>' + (c === 1 ? "1 séance a des joueurs sans réponse." : c + " séances ont des joueurs sans réponse.") + '</div>';
+    }
+    el.innerHTML = html;
+  }
+  function renderBell() {
+    var count = identity && teamId ? (effectiveRole() === "joueur" ? pendingSessionsForPlayer().length : pendingForCoach()) : 0;
+    var badge = document.getElementById("bellBadge");
+    if (count > 0) { badge.style.display = "flex"; badge.textContent = count > 9 ? "9+" : count; }
+    else { badge.style.display = "none"; }
+  }
+  function statAndRoster(sessionId) {
+    var av = availability[sessionId] || {};
+    var counts = { dispo: 0, peutetre: 0, indispo: 0 };
+    var entries = Object.keys(av).map(function (k) { return av[k]; });
+    entries.forEach(function (e) { if (counts[e.status] !== undefined) counts[e.status]++; });
+    var players = Object.keys(people).filter(function (k) { return people[k].role === "joueur"; }).map(function (k) { return people[k]; });
+    var answeredSlugs = Object.keys(av);
+    var pending = players.filter(function (p) { return answeredSlugs.indexOf(slugify(p.name)) === -1; });
+    return { counts: counts, entries: entries, pendingCount: pending.length, pendingNames: pending.map(function(p){return p.name;}) };
+  }
+  function sessionCardHtml(s) {
+    var isPast = s.datetime < todayStr() + "T00:00";
+    var role = effectiveRole();
+    var myStatus = role === "joueur" ? (availability[s.id] && availability[s.id][slugify(identity.name)]) : null;
+    var coachesLabel = (s.coaches && s.coaches.length) ? s.coaches.join(", ") : "Aucun coach assigné";
+    var hh = s.time;
+    var gym = s.gymId ? gyms[s.gymId] : null;
+    var html = '<div class="card" data-id="' + s.id + '">';
+    html += '<div class="card-main" data-role="toggle-roster">';
+    html += '<div class="card-time"><div class="hh">' + hh + '</div><div class="dur">' + s.duration + ' min</div></div>';
+    html += '<div class="card-body">';
+    html += '<div class="card-title">' + escapeHtml(s.title || "Entraînement") + '</div>';
+    html += '<div class="card-meta"><span>📍 ' + escapeHtml(s.gymName || "") + '</span>' + (s.court ? '<span>· ' + escapeHtml(s.court) + '</span>' : '') + '</div>';
+    html += '<div class="card-coaches">🧑‍🏫 ' + escapeHtml(coachesLabel) + '</div>';
+    if (s.notes) html += '<div class="card-coaches">📎 ' + escapeHtml(s.notes) + '</div>';
+    html += '</div></div>';
+
+    if (gym && gym.lat && gym.lng) {
+      html += '<div class="map-embed" id="map-' + s.id + '" data-lat="' + gym.lat + '" data-lng="' + gym.lng + '"></div>';
+    }
+    if (s.gymName) {
+      html += '<div class="map-row">';
+      html += '<button type="button" class="map-link" data-act="map" data-id="' + s.id + '">🗺️ Voir sur Google Maps</button>';
+      html += '<button type="button" class="map-link" data-act="dir" data-id="' + s.id + '">🚌 Itinéraire depuis ma position</button>';
+      html += '</div>';
+    }
+
+    if (role === "joueur" && !isPast) {
+      html += '<div class="chips-row">';
+      ["dispo","peutetre","indispo"].forEach(function (st) {
+        var sel = myStatus && myStatus.status === st;
+        var label = st === "dispo" ? "✅ Dispo" : st === "peutetre" ? "🤔 Peut-être" : "❌ Indispo";
+        html += '<button class="chip ' + st + (sel ? ' sel' : '') + '" data-act="avail" data-status="' + st + '" data-id="' + s.id + '">' + label + '</button>';
+      });
+      html += '</div>';
+    }
+
+    if (role === "coach") {
+      var sr = statAndRoster(s.id);
+      html += '<div class="stat-row">';
+      if (sr.counts.dispo) html += '<span class="pill dispo">' + sr.counts.dispo + ' dispo</span>';
+      if (sr.counts.peutetre) html += '<span class="pill peutetre">' + sr.counts.peutetre + ' peut-être</span>';
+      if (sr.counts.indispo) html += '<span class="pill indispo">' + sr.counts.indispo + ' indispo</span>';
+      if (sr.pendingCount) html += '<span class="pill pending">' + sr.pendingCount + ' sans réponse</span>';
+      if (!sr.entries.length && !sr.pendingCount) html += '<span class="pill pending">Aucun joueur enregistré</span>';
+      html += '</div>';
+
+      html += '<div class="roster' + (openRosterIds[s.id] ? ' open' : '') + '" data-roster-for="' + s.id + '">';
+      sr.entries.forEach(function (e) {
+        html += '<div class="roster-row"><span><span class="roster-name">' + escapeHtml(e.player) + '</span>' +
+          (e.comment ? '<div class="roster-comment">' + escapeHtml(e.comment) + '</div>' : '') + '</span>' +
+          '<span class="roster-status ' + e.status + '">' + statusLabel(e.status) + '</span></div>';
+      });
+      sr.pendingNames.forEach(function (n) {
+        html += '<div class="roster-row"><span class="roster-name">' + escapeHtml(n) + '</span><span class="roster-status">Sans réponse</span></div>';
+      });
+      html += '</div>';
+
+      html += '<div class="card-tools">';
+      html += '<button class="link-btn" data-act="edit" data-id="' + s.id + '">Modifier</button>';
+      html += '<button class="link-btn danger" data-act="delete" data-id="' + s.id + '">Supprimer</button>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+  function renderSessionList() {
+    var list = document.getElementById("sessionList");
+    if (!identity) { list.innerHTML = ""; return; }
+    if (!teamId) {
+      list.innerHTML = '<div class="empty"><div class="e-icon">👥</div><div class="e-title">Choisis une équipe</div><div class="e-sub">Utilise le sélecteur en haut pour rejoindre une équipe.</div></div>';
+      return;
+    }
+    var now = todayStr() + "T00:00";
+    var ids = Object.keys(sessions).sort(function (a, b) { return sessions[a].datetime < sessions[b].datetime ? -1 : 1; });
+    var filtered = ids.filter(function (id) {
+      var s = sessions[id];
+      return currentTab === "upcoming" ? s.datetime >= now : s.datetime < now;
+    });
+    if (currentTab === "past") filtered.reverse();
+
+    if (filtered.length === 0) {
+      if (currentTab === "upcoming") {
+        list.innerHTML = '<div class="empty"><div class="e-icon">🏐</div><div class="e-title">Aucune séance à venir</div>' +
+          '<div class="e-sub">' + (effectiveRole() === "coach" ? "Appuie sur + pour planifier la prochaine séance." : "Ton coach n'a pas encore ajouté de séance.") + '</div></div>';
+      } else {
+        list.innerHTML = '<div class="empty"><div class="e-icon">📭</div><div class="e-title">Aucune séance passée</div></div>';
+      }
+      return;
+    }
+
+    var currentDate = null, html = "";
+    filtered.forEach(function (id) {
+      var s = sessions[id];
+      if (s.date !== currentDate) {
+        currentDate = s.date;
+        html += '<div class="date-heading">' + fmtDateHeading(s.date) + '</div>';
+      }
+      html += sessionCardHtml(s);
+    });
+    list.innerHTML = html;
+
+    Array.prototype.forEach.call(list.querySelectorAll('[data-role="toggle-roster"]'), function (el) {
+      el.addEventListener("click", function () {
+        var id = el.parentElement.getAttribute("data-id");
+        if (effectiveRole() !== "coach") return;
+        openRosterIds[id] = !openRosterIds[id];
+        renderAll();
+      });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="avail"]'), function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setAvailability(btn.getAttribute("data-id"), btn.getAttribute("data-status"));
+      });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="edit"]'), function (btn) {
+      btn.addEventListener("click", function (e) { e.stopPropagation(); openSessionSheet(btn.getAttribute("data-id")); });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="delete"]'), function (btn) {
+      btn.addEventListener("click", function (e) { e.stopPropagation(); deleteSession(btn.getAttribute("data-id")); });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="map"]'), function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var s = sessions[btn.getAttribute("data-id")];
+        if (s) openMap({ name: s.gymName, address: s.gymAddress });
+      });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="dir"]'), function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var s = sessions[btn.getAttribute("data-id")];
+        if (s) openDirections({ name: s.gymName, address: s.gymAddress });
+      });
+    });
+
+    initCardMaps();
+  }
+  function renderAll() {
+    renderIdentity();
+    renderTeamChip();
+    renderBanner();
+    renderBell();
+    renderSessionList();
+  }
+
+  // ---------- notif panel ----------
+  function renderNotifPanel() {
+    var el = document.getElementById("notifList");
+    var items = [];
+    if (identity && teamId && effectiveRole() === "joueur") {
+      pendingSessionsForPlayer().forEach(function (id) {
+        var s = sessions[id];
+        items.push({ t: "Réponse attendue", m: (s.title||"Entraînement") + " · " + s.date + " " + s.time + " · " + (s.gymName||"") });
+      });
+    } else if (identity && teamId && effectiveRole() === "coach") {
+      Object.keys(sessions).forEach(function (id) {
+        var s = sessions[id];
+        if (s.datetime < todayStr() + "T00:00" || !isCoachOf(s)) return;
+        var sr = statAndRoster(id);
+        if (sr.pendingCount > 0) {
+          items.push({ t: sr.pendingCount + " joueur(s) sans réponse", m: (s.title||"Entraînement") + " · " + s.date + " " + s.time });
+        }
+      });
+    }
+    if (items.length === 0) {
+      el.innerHTML = '<div class="notif-item">Tout est à jour, rien à signaler. 🎉</div>';
+    } else {
+      el.innerHTML = items.map(function (it) {
+        return '<div class="notif-item"><div class="t">' + escapeHtml(it.t) + '</div><div class="m">' + escapeHtml(it.m) + '</div></div>';
+      }).join("");
+    }
+    var permRow = document.getElementById("notifPermRow");
+    if (typeof Notification === "undefined") {
+      permRow.innerHTML = "";
+    } else if (Notification.permission === "granted") {
+      permRow.innerHTML = " Rappels activés sur cet appareil.";
+    } else if (Notification.permission === "denied") {
+      permRow.innerHTML = " Rappels bloqués — active-les dans les réglages de ton navigateur.";
+    } else {
+      permRow.innerHTML = ' <button class="link-btn" id="enableNotifBtn" style="text-decoration:underline;">Activer les rappels sur cet appareil</button>';
+      setTimeout(function () {
+        var b = document.getElementById("enableNotifBtn");
+        if (b) b.addEventListener("click", function () {
+          Notification.requestPermission().then(function () { renderNotifPanel(); });
+        });
+      }, 0);
+    }
+  }
+
+  // ---------- wiring ----------
+  document.getElementById("bellBtn").addEventListener("click", function () {
+    renderNotifPanel();
+    document.getElementById("notifOverlay").classList.add("show");
+  });
+  document.getElementById("notifClose").addEventListener("click", function () {
+    document.getElementById("notifOverlay").classList.remove("show");
+  });
+  document.getElementById("adminBtn").addEventListener("click", openAdminOverlay);
+  document.getElementById("adminClose").addEventListener("click", function () {
+    document.getElementById("adminOverlay").classList.remove("show");
+  });
+  document.getElementById("newCoachAdd").addEventListener("click", function () {
+    var input = document.getElementById("newCoachName");
+    var name = input.value.trim();
+    if (!name) { toast("Entre un nom"); return; }
+    if (!teamId) { toast("Choisis d'abord une équipe"); return; }
+    addCoachToWhitelist(name);
+    input.value = "";
+  });
+  document.getElementById("newGymAdd").addEventListener("click", function () {
+    var nameInput = document.getElementById("newGymName");
+    var addrInput = document.getElementById("newGymAddress");
+    var name = nameInput.value.trim();
+    var address = addrInput.value.trim();
+    if (!name || !address) { toast("Nom et adresse requis"); return; }
+    addGym(name, address);
+    nameInput.value = ""; addrInput.value = "";
+  });
+  document.getElementById("teamChip").addEventListener("click", function () { openTeamOverlay(); });
+  document.getElementById("teamOverlayClose").addEventListener("click", closeTeamOverlay);
+  document.getElementById("newTeamAdd").addEventListener("click", function () {
+    var input = document.getElementById("newTeamName");
+    var name = input.value.trim();
+    if (!name) { toast("Entre un nom d'équipe"); return; }
+    addTeam(name);
+    input.value = "";
+  });
+  document.getElementById("identityChip").addEventListener("click", function () {
+    document.getElementById("onboardTitle").textContent = "Ton profil";
+    document.getElementById("onboardName").value = identity ? identity.name : "";
+    setRoleSel(identity ? identity.role : "joueur");
+    document.getElementById("onboardCancel").style.display = "block";
+    document.getElementById("onboardPinField").style.display = "none";
+    document.getElementById("onboardOverlay").classList.add("show");
+  });
+  document.getElementById("onboardCancel").addEventListener("click", function () {
+    document.getElementById("onboardOverlay").classList.remove("show");
+  });
+  document.getElementById("adminModeLink").addEventListener("click", function () {
+    var f = document.getElementById("onboardPinField");
+    f.style.display = f.style.display === "none" ? "block" : "none";
+  });
+  var selectedRole = "joueur";
+  function setRoleSel(role) {
+    selectedRole = role;
+    Array.prototype.forEach.call(document.querySelectorAll(".role-opt"), function (el) {
+      el.classList.toggle("sel", el.getAttribute("data-role") === role);
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".role-opt"), function (el) {
+    el.addEventListener("click", function () { setRoleSel(el.getAttribute("data-role")); });
+  });
+  document.getElementById("onboardSave").addEventListener("click", function () {
+    var name = document.getElementById("onboardName").value.trim();
+    if (!name) { toast("Entre ton nom"); return; }
+    var pinFieldVisible = document.getElementById("onboardPinField").style.display !== "none";
+    var adminUnlocked = false;
+    if (pinFieldVisible) {
+      var pin = document.getElementById("onboardPin").value.trim();
+      if (slugify(name) === slugify(ADMIN_NAME) && pin === ADMIN_PIN) {
+        adminUnlocked = true;
+      } else {
+        toast("Nom ou code administrateur incorrect");
+        return;
+      }
+    }
+    saveIdentity(name, selectedRole, adminUnlocked);
+    document.getElementById("onboardOverlay").classList.remove("show");
+    if (!teamId && dbReady) openTeamOverlay();
+  });
+  document.getElementById("fabAdd").addEventListener("click", function () { openSessionSheet(null); });
+  document.getElementById("sessionCancel").addEventListener("click", closeSessionSheet);
+  document.getElementById("sessionSave").addEventListener("click", saveSession);
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
+    t.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (x) { x.classList.remove("active"); });
+      t.classList.add("active");
+      currentTab = t.getAttribute("data-tab");
+      renderAll();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".overlay"), function (ov) {
+    ov.addEventListener("click", function (e) {
+      if (e.target !== ov) return;
+      if (ov.id === "teamOverlay") { closeTeamOverlay(); return; }
+      ov.classList.remove("show");
+    });
+  });
+
+  // ---------- boot ----------
+  loadIdentity();
+  if (!identity) {
+    document.getElementById("onboardOverlay").classList.add("show");
+  }
+  renderAll();
+  initDb();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "Créneau",
+  "short_name": "Créneau",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EEF1F6",
+  "theme_color": "#1D3557",
+  "lang": "fr"
+}

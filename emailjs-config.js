@@ -32,9 +32,9 @@
 // ---------------------------------------------------------------
 
 var EMAILJS_CONFIG = {
-  publicKey: "REMPLACE_MOI",
-  serviceId: "REMPLACE_MOI",
-  newSessionTemplateId: "REMPLACE_MOI"
+  publicKey: "Ij5YKSamOePoNebSF",
+  serviceId: "service_ufqts9w",
+  newSessionTemplateId: "template_3onfxsa"
 };
 
 if (typeof emailjs !== "undefined" && EMAILJS_CONFIG.publicKey !== "REMPLACE_MOI") {

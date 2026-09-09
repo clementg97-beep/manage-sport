@@ -33,7 +33,7 @@
 
 var EMAILJS_CONFIG = {
   publicKey: "Ij5YKSamOePoNebSF",
-  serviceId: "service_ufqts9w",
+  serviceId: "service_2y2kqg7",
   newSessionTemplateId: "template_3onfxsa"
 };
 

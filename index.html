@@ -102,9 +102,19 @@
   .brand-logo { height: 26px; width: auto; display: block; }
   .brand-sub { font-size: 12px; color: var(--text-muted); font-weight: 500; }
   .team-chip {
-    display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--accent);
-    background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 8px 16px;
-    font-size: 14px; font-weight: 800; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px; border: 2px solid var(--accent);
+    background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 10px 20px;
+    font-size: 16px; font-weight: 800; cursor: pointer;
+  }
+  .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .photo-opt {
+    border: 2px solid var(--border); border-radius: var(--radius-md); overflow: hidden;
+    cursor: pointer; position: relative; height: 90px; background-size: cover; background-position: center;
+  }
+  .photo-opt.sel { border-color: var(--accent); }
+  .photo-opt span {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 8px;
+    background: rgba(15,18,24,0.55); color: #fff; font-size: 11px; font-weight: 700;
   }
   .team-banner {
     position: relative; height: 120px; border-radius: var(--radius-lg); overflow: hidden;
@@ -373,7 +383,7 @@
     <div class="brand">
       <span class="brand-mark"><img class="brand-logo" src="logo.png" alt="Everton Volleyball"> Manage-sport</span>
     </div>
-    <button class="team-chip" id="teamChip" style="display:none;">👥 <span id="teamChipName">—</span><span id="teamChipArrow"> ▾</span></button>
+    <button class="team-chip" id="teamChip" style="display:none;">👥 Équipe : <span id="teamChipName">—</span><span id="teamChipArrow"> ▾</span></button>
   </div>
   <div class="top-actions">
     <button class="icon-btn" id="adminBtn" title="Administration" style="display:none;">⚙️</button>
@@ -452,10 +462,23 @@
     <div id="teamCreateBox" style="display:none;">
       <h3>Nouvelle équipe</h3>
       <input type="text" id="newTeamName" placeholder="Ex. U16 Féminin" maxlength="50" style="margin-bottom:8px;">
-      <input type="url" id="newTeamPhoto" placeholder="URL photo (optionnel — sinon photo par défaut)" maxlength="300" style="margin-bottom:8px;">
+      <div id="newTeamPhotoPreview" class="photo-opt" style="height:70px; margin-bottom:8px; display:none;"></div>
+      <input type="hidden" id="newTeamPhoto" value="">
+      <button type="button" id="newTeamPhotoBtn" class="btn-secondary" style="margin-top:0; margin-bottom:8px;">🖼️ Choisir une photo (optionnel)</button>
       <button type="button" id="newTeamAdd" class="btn-primary" style="margin-top:0;">Créer</button>
     </div>
     <button class="btn-secondary" id="teamOverlayClose">Fermer</button>
+  </div>
+</div>
+
+<!-- Photo picker sheet -->
+<div class="overlay" id="photoPickerOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Choisir une photo d'équipe</h2>
+    <div class="hint" style="margin-top:-10px;">Photos officielles Everton Volleyball — choisis celle qui correspond au niveau/genre de l'équipe.</div>
+    <div class="photo-grid" id="photoGrid"></div>
+    <button class="btn-secondary" id="photoPickerCancel">Annuler</button>
   </div>
 </div>
 
@@ -620,6 +643,32 @@
     { key: "central_2", label: "Central #2" },
     { key: "libero", label: "Libéro" }
   ];
+
+  var PHOTO_GALLERY = [
+    { id: "banner-female-1.jpg", label: "Féminin — Action" },
+    { id: "banner-female-2.jpg", label: "Féminin — Compétition" },
+    { id: "banner-male-1.jpg", label: "Masculin — Défense" },
+    { id: "banner-male-2.jpg", label: "Masculin — Compétition" }
+  ];
+  var DEFAULT_TEAM_PHOTO = "banner-female-1.jpg";
+  var photoPickerCallback = null;
+  function openPhotoPicker(currentUrl, onSelect) {
+    photoPickerCallback = onSelect;
+    var grid = document.getElementById("photoGrid");
+    grid.innerHTML = PHOTO_GALLERY.map(function (p) {
+      return '<div class="photo-opt' + (p.id === currentUrl ? ' sel' : '') + '" data-url="' + p.id + '" style="background-image:url(\'' + p.id + '\');"><span>' + p.label + '</span></div>';
+    }).join("");
+    Array.prototype.forEach.call(grid.querySelectorAll(".photo-opt"), function (el) {
+      el.addEventListener("click", function () {
+        document.getElementById("photoPickerOverlay").classList.remove("show");
+        if (photoPickerCallback) photoPickerCallback(el.getAttribute("data-url"));
+      });
+    });
+    document.getElementById("photoPickerOverlay").classList.add("show");
+  }
+  document.getElementById("photoPickerCancel").addEventListener("click", function () {
+    document.getElementById("photoPickerOverlay").classList.remove("show");
+  });
 
   var DURATION_OPTIONS = []; // minutes, 30min à 4h par tranches de 15
   (function () {
@@ -1338,15 +1387,15 @@
     var team = teamId ? teams[teamId] : null;
     if (!identity || !team) { el.style.display = "none"; return; }
     el.style.display = "block";
-    el.style.backgroundImage = 'url("' + (team.photoUrl || "default-banner.jpg") + '")';
+    el.style.backgroundImage = 'url("' + (team.photoUrl || DEFAULT_TEAM_PHOTO) + '")';
     el.innerHTML = '<div class="team-banner-label">👥 ' + escapeHtml(team.name) + '</div>' +
       (isAdmin ? '<div class="team-banner-sub">✏️ Photo</div>' : '');
   }
   document.getElementById("teamBanner").addEventListener("click", function () {
     if (isAdmin && teamId && teams[teamId]) {
-      var url = prompt("URL de la photo pour \"" + teams[teamId].name + "\" (laisser vide pour la photo par défaut) :", teams[teamId].photoUrl || "");
-      if (url === null) return;
-      teamsCol().doc(teamId).update({ photoUrl: url.trim() }).catch(function () { toast("Erreur"); });
+      openPhotoPicker(teams[teamId].photoUrl, function (url) {
+        teamsCol().doc(teamId).update({ photoUrl: url }).catch(function () { toast("Erreur"); });
+      });
       return;
     }
     if (!isAdmin && myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe — demande-lui."); return; }
@@ -1822,6 +1871,15 @@
     openTeamOverlay();
   });
   document.getElementById("teamOverlayClose").addEventListener("click", closeTeamOverlay);
+  document.getElementById("newTeamPhotoBtn").addEventListener("click", function () {
+    var photoInput = document.getElementById("newTeamPhoto");
+    openPhotoPicker(photoInput.value, function (url) {
+      photoInput.value = url;
+      var prev = document.getElementById("newTeamPhotoPreview");
+      prev.style.display = "block";
+      prev.style.backgroundImage = 'url("' + url + '")';
+    });
+  });
   document.getElementById("newTeamAdd").addEventListener("click", function () {
     var input = document.getElementById("newTeamName");
     var photoInput = document.getElementById("newTeamPhoto");
@@ -1829,6 +1887,7 @@
     if (!name) { toast("Entre un nom d'équipe"); return; }
     addTeam(name, photoInput.value.trim());
     input.value = ""; photoInput.value = "";
+    document.getElementById("newTeamPhotoPreview").style.display = "none";
   });
   document.getElementById("identityChip").addEventListener("click", function () {
     document.getElementById("onboardTitle").textContent = "Ton profil";

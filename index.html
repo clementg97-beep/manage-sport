@@ -465,6 +465,14 @@
     <div class="hint" style="margin-top:-4px;">Joueurs et coachs sont verrouillés sur leur équipe une fois assignés — change leur équipe ici si besoin.</div>
     <div id="membersList"></div>
 
+    <h3>Administrateurs</h3>
+    <div class="hint" style="margin-top:-4px;">Ces personnes peuvent débloquer le mode admin avec le même code, en plus de l'administrateur principal.</div>
+    <div class="inline-add">
+      <input type="text" id="newAdminName" placeholder="Nom complet exact" maxlength="40">
+      <button type="button" id="newAdminAdd">Ajouter</button>
+    </div>
+    <div id="adminsList"></div>
+
     <button class="btn-secondary" id="adminClose">Fermer</button>
   </div>
 </div>
@@ -524,6 +532,15 @@
     <label class="field">
       <span class="lbl">Lien vers un fichier (optionnel)</span>
       <input type="url" id="fLink" placeholder="Ex. lien Google Drive du détail du tournoi" maxlength="300">
+    </label>
+    <label class="field" id="fRepeatField">
+      <span class="lbl" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="fRepeat" style="width:auto;"> Répéter chaque semaine
+      </span>
+    </label>
+    <label class="field" id="fRepeatUntilField" style="display:none;">
+      <span class="lbl">Jusqu'au</span>
+      <input type="date" id="fRepeatUntil">
     </label>
     <button class="btn-primary" id="sessionSave">Enregistrer</button>
     <button class="btn-secondary" id="sessionCancel">Annuler</button>
@@ -671,6 +688,7 @@
   var myAssignment = null;       // {name, teamId} — this device's locked team, from Firestore (non-admin only)
   var myAssignmentUnsub = null;
   var allAssignments = {};       // slug -> {name, teamId} — for the admin "Membres" panel
+  var adminNames = {};           // slug -> {name} — additional admins beyond ADMIN_NAME
 
   // ---------- identity / admin / team persistence ----------
   function loadIdentity() {
@@ -749,6 +767,7 @@
   function availCol(tid) { return db.collection("teams/" + tid + "/availability"); }
   function peopleCol(tid) { return db.collection("teams/" + tid + "/people"); }
   function assignmentsCol() { return db.collection("assignments"); }
+  function adminsCol() { return db.collection("admins"); }
 
   // ---------- geocoding (best-effort, only for gyms an admin adds without coords) ----------
   function geocodeAndSave(gymId, address) {
@@ -797,6 +816,13 @@
     }, function () { /* degrade quietly */ });
 
     if (identity) subscribeMyAssignment();
+
+    adminsCol().onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
+      adminNames = next;
+      renderAdminAdminsList();
+    }, function () { /* degrade quietly */ });
 
     gymsCol().onSnapshot(function (snap) {
       var next = {};
@@ -996,12 +1022,20 @@
     document.getElementById("fNotes").value = s ? (s.notes || "") : "";
     document.getElementById("fLink").value = s ? (s.link || "") : "";
 
+    document.getElementById("fRepeatField").style.display = id ? "none" : "block";
+    document.getElementById("fRepeat").checked = false;
+    document.getElementById("fRepeatUntilField").style.display = "none";
+    document.getElementById("fRepeatUntil").value = "";
+
     renderGymSelect(s ? s.gymId : null);
     populateCourtList();
     populateCoachPicker(s ? s.coaches || [] : (identity ? [identity.name] : []));
     populateLineupSelects(s ? s.lineup : null);
     document.getElementById("sessionOverlay").classList.add("show");
   }
+  document.getElementById("fRepeat").addEventListener("change", function () {
+    document.getElementById("fRepeatUntilField").style.display = this.checked ? "block" : "none";
+  });
   Array.prototype.forEach.call(document.querySelectorAll(".type-opt"), function (el) {
     el.addEventListener("click", function () { setTypeSel(el.getAttribute("data-type")); });
   });
@@ -1106,10 +1140,9 @@
     var gymId = document.getElementById("fGymSelect").value;
     var gym = gyms[gymId];
     if (!gymId || !gym) { toast("Choisis un gymnase (ou ajoute-en un via Administration)"); return; }
-    var data = {
+    var baseData = {
       type: selectedType,
-      date: date, time: time,
-      datetime: date + "T" + time,
+      time: time,
       duration: parseInt(document.getElementById("fDuration").value, 10) || 90,
       gymId: gymId,
       gymName: gym.name,
@@ -1123,12 +1156,40 @@
       updatedAt: new Date().toISOString()
     };
     if (!dbReady) { toast("Sauvegarde indisponible — vérifie la configuration Firebase"); return; }
-    var isNew = !editingSessionId;
-    var p = editingSessionId
-      ? sessionsCol(teamId).doc(editingSessionId).update(data).then(function () { toast("Séance mise à jour"); })
-      : (function () { data.createdAt = new Date().toISOString(); return sessionsCol(teamId).add(data).then(function () { toast("Séance créée"); }); })();
-    p.then(function () {
-      if (isNew) sendNewSessionEmails(teamId, data);
+
+    if (editingSessionId) {
+      var updateData = Object.assign({ date: date, datetime: date + "T" + time }, baseData);
+      sessionsCol(teamId).doc(editingSessionId).update(updateData)
+        .then(function () { toast("Séance mise à jour"); closeSessionSheet(); })
+        .catch(function () { toast("Erreur d'enregistrement"); });
+      return;
+    }
+
+    var repeat = document.getElementById("fRepeat").checked;
+    var untilStr = document.getElementById("fRepeatUntil").value;
+    var dates = [date];
+    if (repeat) {
+      if (!untilStr || untilStr < date) { toast("Choisis une date de fin valide pour la répétition"); return; }
+      var d = new Date(date + "T00:00:00");
+      var until = new Date(untilStr + "T00:00:00");
+      d.setDate(d.getDate() + 7);
+      while (d <= until) {
+        dates.push(d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"));
+        d.setDate(d.getDate() + 7);
+      }
+    }
+    var seriesId = dates.length > 1 ? (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)) : null;
+    var batch = db.batch();
+    var firstData = null;
+    dates.forEach(function (d) {
+      var docData = Object.assign({}, baseData, { date: d, datetime: d + "T" + time, createdAt: new Date().toISOString() });
+      if (seriesId) docData.seriesId = seriesId;
+      if (!firstData) firstData = docData;
+      batch.set(sessionsCol(teamId).doc(), docData);
+    });
+    batch.commit().then(function () {
+      toast(dates.length > 1 ? (dates.length + " séances créées") : "Séance créée");
+      sendNewSessionEmails(teamId, firstData);
       closeSessionSheet();
     }).catch(function () { toast("Erreur d'enregistrement"); });
   }
@@ -1175,14 +1236,23 @@
     sessionsCol(teamId).doc(id).delete().then(function () { toast("Séance supprimée"); })
       .catch(function () { toast("Erreur de suppression"); });
   }
+  function deleteSeries(seriesId) {
+    if (!dbReady || !teamId) return;
+    var ids = Object.keys(sessions).filter(function (id) { return sessions[id].seriesId === seriesId; });
+    if (!confirm("Supprimer les " + ids.length + " séances de cette série ?")) return;
+    var batch = db.batch();
+    ids.forEach(function (id) { batch.delete(sessionsCol(teamId).doc(id)); });
+    batch.commit().then(function () { toast(ids.length + " séances supprimées"); })
+      .catch(function () { toast("Erreur de suppression"); });
+  }
 
   // ---------- availability ----------
-  function setAvailability(sessionId, status) {
+  function setAvailability(sessionId, status, comment) {
     if (!identity || !teamId) return;
     if (!dbReady) { toast("Réponse indisponible — vérifie la configuration Firebase"); return; }
     var docId = sessionId + "_" + slugify(identity.name);
     availCol(teamId).doc(docId).set({
-      sessionId: sessionId, player: identity.name, status: status,
+      sessionId: sessionId, player: identity.name, status: status, comment: comment || "",
       updatedAt: new Date().toISOString()
     }).catch(function () { toast("Erreur d'enregistrement"); });
   }
@@ -1306,11 +1376,40 @@
       });
     });
   }
+  function renderAdminAdminsList() {
+    var el = document.getElementById("adminsList");
+    if (!el) return;
+    var slugs = Object.keys(adminNames).sort(function (a, b) { return adminNames[a].name.localeCompare(adminNames[b].name); });
+    var rows = '<div class="list-row"><span class="lr-main">' + escapeHtml(ADMIN_NAME) + '</span><span class="lr-sub">Administrateur principal</span></div>';
+    rows += slugs.map(function (slug) {
+      return '<div class="list-row"><span class="lr-main">' + escapeHtml(adminNames[slug].name) + '</span>' +
+        '<button type="button" class="lr-del" data-slug="' + slug + '">Retirer</button></div>';
+    }).join("");
+    el.innerHTML = rows;
+    Array.prototype.forEach.call(el.querySelectorAll(".lr-del"), function (btn) {
+      btn.addEventListener("click", function () { removeAdminName(btn.getAttribute("data-slug")); });
+    });
+  }
+  function addAdminName(name) {
+    if (!dbReady) return;
+    var slug = slugify(name);
+    if (slug === slugify(ADMIN_NAME)) { toast("Déjà administrateur principal"); return; }
+    adminsCol().doc(slug).set({ name: name, addedBy: identity ? identity.name : "", addedAt: new Date().toISOString() })
+      .then(function () { toast("Administrateur ajouté"); })
+      .catch(function () { toast("Erreur"); });
+  }
+  function removeAdminName(slug) {
+    if (!dbReady) return;
+    if (!confirm("Retirer les droits administrateur de cette personne ?")) return;
+    adminsCol().doc(slug).delete().then(function () { toast("Administrateur retiré"); })
+      .catch(function () { toast("Erreur"); });
+  }
   function openAdminOverlay() {
     document.getElementById("adminTeamHint").textContent = teamId && teams[teamId] ? ("Équipe active : " + teams[teamId].name) : "Choisis d'abord une équipe.";
     renderAdminCoachList();
     renderAdminGymList();
     renderAdminMembersList();
+    renderAdminAdminsList();
     document.getElementById("adminOverlay").classList.add("show");
   }
 
@@ -1450,6 +1549,9 @@
         html += '<button class="chip ' + st + (sel ? ' sel' : '') + '" data-act="avail" data-status="' + st + '" data-id="' + s.id + '">' + label + '</button>';
       });
       html += '</div>';
+      if (myStatus) {
+        html += '<div style="padding:0 14px 14px;"><input type="text" data-act="comment" data-id="' + s.id + '" value="' + escapeHtml(myStatus.comment || "") + '" placeholder="Commentaire (optionnel, ex. en retard de 10 min)" maxlength="120" style="font-size:13px; padding:9px 10px;"></div>';
+      }
     }
 
     if (role === "coach" || role === "joueur") {
@@ -1479,6 +1581,7 @@
       html += '<div class="card-tools">';
       html += '<button class="link-btn" data-act="edit" data-id="' + s.id + '">Modifier</button>';
       html += '<button class="link-btn danger" data-act="delete" data-id="' + s.id + '">Supprimer</button>';
+      if (s.seriesId) html += '<button class="link-btn danger" data-act="delete-series" data-series="' + s.seriesId + '">Supprimer la série</button>';
       html += '</div>';
     }
 
@@ -1532,7 +1635,19 @@
     Array.prototype.forEach.call(list.querySelectorAll('[data-act="avail"]'), function (btn) {
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
-        setAvailability(btn.getAttribute("data-id"), btn.getAttribute("data-status"));
+        var id = btn.getAttribute("data-id");
+        var existing = availability[id] && availability[id][slugify(identity.name)];
+        setAvailability(id, btn.getAttribute("data-status"), existing ? existing.comment : "");
+      });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="comment"]'), function (input) {
+      input.addEventListener("click", function (e) { e.stopPropagation(); });
+      input.addEventListener("blur", function () {
+        var id = input.getAttribute("data-id");
+        var existing = availability[id] && availability[id][slugify(identity.name)];
+        if (!existing) return;
+        if ((existing.comment || "") === input.value.trim()) return;
+        setAvailability(id, existing.status, input.value.trim());
       });
     });
     Array.prototype.forEach.call(list.querySelectorAll('[data-act="edit"]'), function (btn) {
@@ -1540,6 +1655,9 @@
     });
     Array.prototype.forEach.call(list.querySelectorAll('[data-act="delete"]'), function (btn) {
       btn.addEventListener("click", function (e) { e.stopPropagation(); deleteSession(btn.getAttribute("data-id")); });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-act="delete-series"]'), function (btn) {
+      btn.addEventListener("click", function (e) { e.stopPropagation(); deleteSeries(btn.getAttribute("data-series")); });
     });
     Array.prototype.forEach.call(list.querySelectorAll('[data-act="map"]'), function (btn) {
       btn.addEventListener("click", function (e) {
@@ -1640,6 +1758,13 @@
     addGym(name, address);
     nameInput.value = ""; addrInput.value = "";
   });
+  document.getElementById("newAdminAdd").addEventListener("click", function () {
+    var input = document.getElementById("newAdminName");
+    var name = input.value.trim();
+    if (!name) { toast("Entre un nom"); return; }
+    addAdminName(name);
+    input.value = "";
+  });
   document.getElementById("teamChip").addEventListener("click", function () {
     if (!isAdmin && myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe — demande-lui."); return; }
     openTeamOverlay();
@@ -1698,7 +1823,8 @@
     var adminUnlocked = false;
     if (pinFieldVisible) {
       var pin = document.getElementById("onboardPin").value.trim();
-      if (slugify(name) === slugify(ADMIN_NAME) && pin === ADMIN_PIN) {
+      var isKnownAdminName = slugify(name) === slugify(ADMIN_NAME) || !!adminNames[slugify(name)];
+      if (isKnownAdminName && pin === ADMIN_PIN) {
         adminUnlocked = true;
       } else {
         toast("Nom ou code administrateur incorrect");

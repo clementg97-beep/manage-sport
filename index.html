@@ -654,17 +654,29 @@
     peopleCol(teamId).doc(slug).set({ name: identity.name, role: identity.role, email: identity.email || "", updatedAt: new Date().toISOString() })
       .catch(function () {});
   }
+  // effectiveRole() is the PARTICIPATION role — decides whether this
+  // person sees availability chips and counts as a player in rosters.
+  // It follows their declared role, not admin status: an admin who
+  // declared "Joueur" still has to answer dispo/indispo like anyone —
+  // admin only grants coach status for people who declared "Coach"
+  // (bypassing the per-team whitelist). Coachs never answer presence.
   function effectiveRole() {
     if (!identity) return null;
-    if (isAdmin) return "coach";
     if (identity.role !== "coach") return "joueur";
+    if (isAdmin) return "coach";
     return coachWhitelist[slugify(identity.name)] ? "coach" : "joueur";
+  }
+  // canManageTeam() is the MANAGEMENT permission — create/edit/delete
+  // sessions, see the roster as a manager. Admin always has it,
+  // independently of what they participate as.
+  function canManageTeam() {
+    return isAdmin || effectiveRole() === "coach";
   }
   function isPendingCoach() {
     return !!identity && identity.role === "coach" && !isAdmin && effectiveRole() !== "coach";
   }
   function isCoachOf(s) {
-    return effectiveRole() === "coach" && s.coaches && s.coaches.indexOf(identity.name) !== -1;
+    return isAdmin || (effectiveRole() === "coach" && s.coaches && s.coaches.indexOf(identity.name) !== -1);
   }
   function statusLabel(st) {
     return st === "dispo" ? "Disponible" : st === "peutetre" ? "Peut-être" : st === "indispo" ? "Indisponible" : "Sans réponse";
@@ -674,10 +686,10 @@
     if (!identity) return;
     document.getElementById("chipName").textContent = identity.name;
     var role = effectiveRole();
-    var roleLabel = isAdmin ? "Admin" : (role === "coach" ? "Coach" : (isPendingCoach() ? "Joueur (coach en attente)" : "Joueur"));
+    var roleLabel = (role === "coach" ? "Coach" : (isPendingCoach() ? "Joueur (coach en attente)" : "Joueur")) + (isAdmin ? " · Admin" : "");
     document.getElementById("chipRole").textContent = roleLabel;
     document.getElementById("avatarInit").textContent = initials(identity.name);
-    document.getElementById("fabAdd").style.display = (role === "coach" && teamId) ? "flex" : "none";
+    document.getElementById("fabAdd").style.display = (canManageTeam() && teamId) ? "flex" : "none";
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
   }
 
@@ -868,7 +880,7 @@
   }
   var notifiedAvailIds = {};
   function checkNewAvailabilityNotifications() {
-    if (initialAvailLoad || !identity || effectiveRole() !== "coach") return;
+    if (initialAvailLoad || !identity || !canManageTeam()) return;
     Object.keys(availability).forEach(function (sid) {
       var s = sessions[sid];
       if (!s || !isCoachOf(s)) return;
@@ -1211,7 +1223,7 @@
     });
   }
   function pendingForCoach() {
-    if (!identity || effectiveRole() !== "coach" || !teamId) return 0;
+    if (!identity || !canManageTeam() || !teamId) return 0;
     var now = todayStr() + "T00:00";
     var players = Object.keys(people).filter(function (k) { return people[k].role === "joueur"; });
     var count = 0;
@@ -1226,7 +1238,7 @@
     return count;
   }
   function urgentPendingForCoach() {
-    if (!identity || effectiveRole() !== "coach" || !teamId) return 0;
+    if (!identity || !canManageTeam() || !teamId) return 0;
     var players = Object.keys(people).filter(function (k) { return people[k].role === "joueur"; });
     var count = 0;
     Object.keys(sessions).forEach(function (id) {
@@ -1251,7 +1263,8 @@
       if (urgentIds.length > 0) html += '<div class="banner warn"><span class="banner-icon">⏰</span>' + (urgentIds.length === 1 ? "1 séance dans moins de 6h attend ta réponse !" : urgentIds.length + " séances dans moins de 6h attendent ta réponse !") + '</div>';
       var n = pendingSessionsForPlayer().length;
       if (n > 0) html += '<div class="banner"><span class="banner-icon">📝</span>' + (n === 1 ? "1 séance attend ta réponse." : n + " séances attendent ta réponse.") + '</div>';
-    } else if (effectiveRole() === "coach") {
+    }
+    if (canManageTeam()) {
       var u = urgentPendingForCoach();
       if (u > 0) html += '<div class="banner warn"><span class="banner-icon">⏰</span>' + (u === 1 ? "1 séance dans moins de 6h a des joueurs sans réponse." : u + " séances dans moins de 6h ont des joueurs sans réponse.") + '</div>';
       var c = pendingForCoach();
@@ -1260,7 +1273,9 @@
     el.innerHTML = html;
   }
   function renderBell() {
-    var count = identity && teamId ? (effectiveRole() === "joueur" ? pendingSessionsForPlayer().length : pendingForCoach()) : 0;
+    var count = identity && teamId
+      ? (effectiveRole() === "joueur" ? pendingSessionsForPlayer().length : 0) + (canManageTeam() ? pendingForCoach() : 0)
+      : 0;
     var badge = document.getElementById("bellBadge");
     if (count > 0) { badge.style.display = "flex"; badge.textContent = count > 9 ? "9+" : count; }
     else { badge.style.display = "none"; }
@@ -1342,7 +1357,7 @@
       html += '</div>';
     }
 
-    if (role === "coach") {
+    if (canManageTeam()) {
       html += '<div class="card-tools">';
       html += '<button class="link-btn" data-act="edit" data-id="' + s.id + '">Modifier</button>';
       html += '<button class="link-btn danger" data-act="delete" data-id="' + s.id + '">Supprimer</button>';
@@ -1370,7 +1385,7 @@
     if (filtered.length === 0) {
       if (currentTab === "upcoming") {
         list.innerHTML = '<div class="empty"><div class="e-icon">🏐</div><div class="e-title">Aucune séance à venir</div>' +
-          '<div class="e-sub">' + (effectiveRole() === "coach" ? "Appuie sur + pour planifier la prochaine séance." : "Ton coach n'a pas encore ajouté de séance.") + '</div></div>';
+          '<div class="e-sub">' + (canManageTeam() ? "Appuie sur + pour planifier la prochaine séance." : "Ton coach n'a pas encore ajouté de séance.") + '</div></div>';
       } else {
         list.innerHTML = '<div class="empty"><div class="e-icon">📭</div><div class="e-title">Aucune séance passée</div></div>';
       }
@@ -1442,7 +1457,8 @@
         var s = sessions[id];
         items.push({ t: "Réponse attendue", m: (s.title||"Entraînement") + " · " + s.date + " " + s.time + " · " + (s.gymName||"") });
       });
-    } else if (identity && teamId && effectiveRole() === "coach") {
+    }
+    if (identity && teamId && canManageTeam()) {
       Object.keys(sessions).forEach(function (id) {
         var s = sessions[id];
         if (s.datetime < todayStr() + "T00:00" || !isCoachOf(s)) return;

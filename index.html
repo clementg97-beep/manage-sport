@@ -402,6 +402,8 @@
       <span class="lbl">Code administrateur</span>
       <input type="password" id="onboardPin" inputmode="numeric" placeholder="Code à 4 chiffres" maxlength="6">
     </label>
+    <div class="hint" id="adminActiveHint" style="display:none; color: var(--indispo);">Mode administrateur actif sur cet appareil (droits coach sur toutes les équipes).</div>
+    <button type="button" class="text-link" id="adminLogoutLink" style="display:none; color: var(--indispo);">Désactiver le mode admin sur cet appareil</button>
     <button class="btn-primary" id="onboardSave">C'est parti</button>
     <button class="btn-secondary" id="onboardCancel" style="display:none;">Annuler</button>
   </div>
@@ -645,7 +647,7 @@
     if (!identity) return;
     document.getElementById("chipName").textContent = identity.name;
     var role = effectiveRole();
-    var roleLabel = role === "coach" ? "Coach" : (isPendingCoach() ? "Joueur (coach en attente)" : "Joueur");
+    var roleLabel = isAdmin ? "Admin" : (role === "coach" ? "Coach" : (isPendingCoach() ? "Joueur (coach en attente)" : "Joueur"));
     document.getElementById("chipRole").textContent = roleLabel;
     document.getElementById("avatarInit").textContent = initials(identity.name);
     document.getElementById("fabAdd").style.display = (role === "coach" && teamId) ? "flex" : "none";
@@ -1356,6 +1358,9 @@
     setRoleSel(identity ? identity.role : "joueur");
     document.getElementById("onboardCancel").style.display = "block";
     document.getElementById("onboardPinField").style.display = "none";
+    document.getElementById("adminModeLink").style.display = isAdmin ? "none" : "block";
+    document.getElementById("adminActiveHint").style.display = isAdmin ? "block" : "none";
+    document.getElementById("adminLogoutLink").style.display = isAdmin ? "block" : "none";
     document.getElementById("onboardOverlay").classList.add("show");
   });
   document.getElementById("onboardCancel").addEventListener("click", function () {
@@ -1364,6 +1369,13 @@
   document.getElementById("adminModeLink").addEventListener("click", function () {
     var f = document.getElementById("onboardPinField");
     f.style.display = f.style.display === "none" ? "block" : "none";
+  });
+  document.getElementById("adminLogoutLink").addEventListener("click", function () {
+    isAdmin = false;
+    try { localStorage.removeItem("creneau_admin"); } catch (e) {}
+    toast("Mode administrateur désactivé sur cet appareil");
+    document.getElementById("onboardOverlay").classList.remove("show");
+    renderAll();
   });
   var selectedRole = "joueur";
   function setRoleSel(role) {

@@ -440,7 +440,13 @@
   }
   .court-pos.filled .court-pos-circle { background: #FFC94A; border: 2px solid #FFC94A; color: #171A21; }
   .court-pos-label { font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
-  .libero-row { display: flex; justify-content: center; margin-bottom: 12px; }
+  .libero-row { display: flex; justify-content: flex-start; align-items: center; gap: 10px; margin: 4px 0 14px; padding-left: 4px; }
+  .libero-row .court-pos { flex-direction: row; gap: 8px; }
+  .libero-row .court-pos-circle {
+    width: 48px; height: 48px; background: #171A21; border: 2px solid #171A21; color: #fff;
+  }
+  .libero-row .court-pos.filled .court-pos-circle { background: #171A21; border-color: #171A21; color: #FFC94A; }
+  .libero-row .court-pos-label { color: var(--text); text-shadow: none; font-size: 12px; }
   .lineup-picker-row {
     display: flex; align-items: center; justify-content: space-between; padding: 12px 4px;
     border-bottom: 1px dashed var(--border); cursor: pointer; font-size: 14px; font-weight: 600;
@@ -541,6 +547,17 @@
       </div>
     </label>
     <div class="hint">Le rôle Coach doit être autorisé par l'administrateur pour chaque équipe. Sinon tu restes Joueur en attendant.</div>
+    <div class="row2">
+      <label class="field">
+        <span class="lbl">Poste principal</span>
+        <select id="onboardPosition"></select>
+      </label>
+      <label class="field">
+        <span class="lbl">Poste secondaire (optionnel)</span>
+        <select id="onboardPosition2"></select>
+      </label>
+    </div>
+    <div class="hint" style="margin-top:-8px;">Utilisé pour le banc lors des alignements de match. Modifiable ici à tout moment.</div>
     <button type="button" class="text-link" id="adminModeLink">Je suis l'administrateur du club</button>
     <label class="field" id="onboardPinField" style="display:none;">
       <span class="lbl">Code administrateur</span>
@@ -766,19 +783,23 @@
     { id: "saint-justin", name: "Saint-Justin", address: "8300 Rue De Teck, Montréal, QC H1L 1H4", lat: 45.5991874, lng: -73.5303825 }
   ];
 
-  // Ordre = placement sur le terrain : les 3 premiers onCourt forment la
-  // rangée avant (au filet), les 3 suivants la rangée arrière. Le libéro
-  // n'est pas une position simultanée au vrai volleyball (il remplace un
-  // arrière), donc affiché à part, sous le terrain.
+  // Ordre = placement réel sur le terrain (base du 5-1, filet en haut) :
+  // rangée avant = R4 (pos.4) | Central (pos.3) | Passeur (pos.2)
+  // rangée arrière = Pointu (pos.5) | Central (pos.6) | R4 (pos.1, service)
+  // Le libéro n'est pas une des 6 positions simultanées (il remplace un
+  // arrière selon les règles), affiché à part. role = poste déclarable par
+  // un joueur dans sa fiche perso (indépendant d'avant/arrière).
   var LINEUP_POSITIONS = [
-    { key: "passeur", label: "Passeur", short: "Passeur", onCourt: true },
-    { key: "central_1", label: "Central #1", short: "Central 1", onCourt: true },
-    { key: "technique", label: "Technique", short: "Technique", onCourt: true },
-    { key: "r4_1", label: "R4 #1", short: "R4 1", onCourt: true },
-    { key: "central_2", label: "Central #2", short: "Central 2", onCourt: true },
-    { key: "r4_2", label: "R4 #2", short: "R4 2", onCourt: true },
-    { key: "libero", label: "Libéro", short: "Libéro", onCourt: false }
+    { key: "r4_front", role: "r4", label: "R4", short: "R4", onCourt: true },
+    { key: "central_front", role: "central", label: "Central", short: "Central", onCourt: true },
+    { key: "passeur", role: "passeur", label: "Passeur", short: "Passeur", onCourt: true },
+    { key: "pointu", role: "pointu", label: "Pointu", short: "Pointu", onCourt: true },
+    { key: "central_back", role: "central", label: "Central", short: "Central", onCourt: true },
+    { key: "r4_back", role: "r4", label: "R4", short: "R4", onCourt: true },
+    { key: "libero", role: "libero", label: "Libéro", short: "Libéro", onCourt: false }
   ];
+  var ROLE_LABELS = { passeur: "Passeur", pointu: "Pointu", central: "Central", r4: "R4", libero: "Libéro" };
+  var ROLE_ORDER = ["passeur", "pointu", "central", "r4", "libero"];
 
   var PHOTO_GALLERY = [
     { id: "banner-female-1.jpg", label: "Féminin — Action" },
@@ -910,8 +931,8 @@
       teamId = localStorage.getItem("creneau_team") || null;
     } catch (e) {}
   }
-  function saveIdentity(name, role, email, adminUnlocked) {
-    identity = { name: name, role: role, email: email };
+  function saveIdentity(name, role, email, position, position2, adminUnlocked) {
+    identity = { name: name, role: role, email: email, position: position || "", position2: position2 || "" };
     if (adminUnlocked) isAdmin = true;
     try {
       localStorage.setItem("creneau_identity", JSON.stringify(identity));
@@ -928,8 +949,11 @@
   function upsertPerson() {
     if (!dbReady || !teamId || !identity) return;
     var slug = slugify(identity.name);
-    peopleCol(teamId).doc(slug).set({ name: identity.name, role: identity.role, email: identity.email || "", updatedAt: new Date().toISOString() })
-      .catch(function () {});
+    peopleCol(teamId).doc(slug).set({
+      name: identity.name, role: identity.role, email: identity.email || "",
+      position: identity.position || "", position2: identity.position2 || "",
+      updatedAt: new Date().toISOString()
+    }).catch(function () {});
   }
   // effectiveRole() is the PARTICIPATION role — decides whether this
   // person sees availability chips and counts as a player in rosters.
@@ -1356,6 +1380,31 @@
     return Object.keys(people).filter(function (k) { return people[k].role === "joueur"; })
       .map(function (k) { return people[k].name; }).sort(function (a, b) { return a.localeCompare(b); });
   }
+  function findPersonByName(name) {
+    return people[slugify(name)] || null;
+  }
+  function benchGroupedHtml(benchNames) {
+    if (benchNames.length === 0) return "Tous les joueurs de l'équipe sont alignés.";
+    var groups = {}, none = [];
+    benchNames.forEach(function (n) {
+      var p = findPersonByName(n);
+      var positions = p ? [p.position, p.position2].filter(Boolean) : [];
+      if (positions.length === 0) { none.push(n); return; }
+      positions.forEach(function (pos) {
+        if (!groups[pos]) groups[pos] = [];
+        if (groups[pos].indexOf(n) === -1) groups[pos].push(n);
+      });
+    });
+    var html = '<ul style="margin:6px 0 0; padding-left:20px;">';
+    ROLE_ORDER.forEach(function (r) {
+      if (groups[r] && groups[r].length) {
+        html += '<li><strong>' + ROLE_LABELS[r] + '</strong> : ' + groups[r].map(escapeHtml).join(", ") + '</li>';
+      }
+    });
+    if (none.length) html += '<li><strong>Sans poste déclaré</strong> : ' + none.map(escapeHtml).join(", ") + '</li>';
+    html += '</ul>';
+    return html;
+  }
   var currentLineupDraft = {};
   function populateLineupSelects(existingLineup) {
     currentLineupDraft = {};
@@ -1417,7 +1466,7 @@
     var bench = teamPlayerNames().filter(function (n) { return assigned.indexOf(n) === -1; });
     var hint = document.getElementById("lineupBenchHint");
     if (!hint) return;
-    hint.textContent = bench.length ? ("Banc : " + bench.join(", ")) : "Tous les joueurs de l'équipe sont alignés.";
+    hint.innerHTML = '<strong>🪑 Banc</strong><br>' + benchGroupedHtml(bench);
   }
   function renderGymSelect(selectedId) {
     var sel = document.getElementById("fGymSelect");
@@ -1954,7 +2003,7 @@
         html += '</ul>';
         var assignedNames = filledPositions.map(function (p) { return s.lineup[p.key]; });
         var bench = teamPlayerNames().filter(function (n) { return assignedNames.indexOf(n) === -1; });
-        if (bench.length) html += '<div class="card-coaches" style="padding:0 14px 10px;">🪑 Banc : ' + escapeHtml(bench.join(", ")) + '</div>';
+        if (bench.length) html += '<div class="card-coaches" style="padding:0 14px 10px;">🪑 <strong>Banc</strong>' + benchGroupedHtml(bench) + '</div>';
       }
     }
 
@@ -2417,10 +2466,21 @@
     input.value = ""; photoInput.value = "";
     document.getElementById("newTeamPhotoPreview").style.display = "none";
   });
+  function populatePositionSelects(selectedPos, selectedPos2) {
+    var opts = '<option value="">— Aucun —</option>' + ROLE_ORDER.map(function (r) {
+      return '<option value="' + r + '">' + ROLE_LABELS[r] + '</option>';
+    }).join("");
+    var sel1 = document.getElementById("onboardPosition");
+    var sel2 = document.getElementById("onboardPosition2");
+    sel1.innerHTML = opts; sel2.innerHTML = opts;
+    sel1.value = selectedPos || "";
+    sel2.value = selectedPos2 || "";
+  }
   document.getElementById("identityChip").addEventListener("click", function () {
     document.getElementById("onboardTitle").textContent = "Ton profil";
     document.getElementById("onboardName").value = identity ? identity.name : "";
     document.getElementById("onboardEmail").value = identity ? (identity.email || "") : "";
+    populatePositionSelects(identity ? identity.position : "", identity ? identity.position2 : "");
     setRoleSel(identity ? identity.role : "joueur");
     document.getElementById("onboardCancel").style.display = "block";
     document.getElementById("onboardPinField").style.display = "none";
@@ -2471,7 +2531,9 @@
         return;
       }
     }
-    saveIdentity(name, selectedRole, email, adminUnlocked);
+    var position = document.getElementById("onboardPosition").value;
+    var position2 = document.getElementById("onboardPosition2").value;
+    saveIdentity(name, selectedRole, email, position, position2, adminUnlocked);
     document.getElementById("onboardOverlay").classList.remove("show");
     if (!teamId && dbReady) openTeamOverlay();
   });
@@ -2515,6 +2577,7 @@
   // ---------- boot ----------
   loadIdentity();
   if (!identity) {
+    populatePositionSelects("", "");
     document.getElementById("onboardOverlay").classList.add("show");
   }
   renderAll();

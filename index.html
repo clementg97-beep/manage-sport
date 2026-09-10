@@ -521,6 +521,7 @@
   <div class="view-toggle">
     <button class="view-mode-btn active" id="viewModeList">📋 Liste</button>
     <button class="view-mode-btn" id="viewModeCalendar">🗓️ Calendrier</button>
+    <button class="view-mode-btn" id="viewModeGlobal" style="display:none;">🌐 Global</button>
   </div>
 
   <div class="tabs" id="listTabs">
@@ -937,10 +938,12 @@
   var people = {};          // slug -> {name, role} (current team)
   var coachWhitelist = {};  // slug -> {name} (current team)
   var currentTab = "upcoming";
-  var viewMode = "list";   // "list" | "calendar"
+  var viewMode = "list";   // "list" | "calendar" | "global" (global = admin-only, all teams)
   var calSubView = "month"; // "month" | "week" | "day"
   var calendarMonth = new Date(); calendarMonth.setDate(1);
   var selectedCalDay = null;
+  var globalSessions = {}; // id -> session data + teamId + teamName (admin-only cross-team view)
+  var globalSessionsUnsub = null;
   var openRosterIds = {};
   var db = null;
   var dbReady = false;
@@ -1036,6 +1039,8 @@
     document.getElementById("avatarInit").textContent = initials(identity.name);
     document.getElementById("fabAdd").style.display = (canCreateSessions() && teamId) ? "flex" : "none";
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
+    var globalBtnEl = document.getElementById("viewModeGlobal");
+    if (globalBtnEl) globalBtnEl.style.display = isAdmin ? "block" : "none";
     document.getElementById("icsExportBtn").style.display = teamId ? "block" : "none";
   }
 
@@ -2251,9 +2256,10 @@
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
   function sessionsByDate() {
+    var src = viewMode === "global" ? globalSessions : sessions;
     var byDate = {};
-    Object.keys(sessions).forEach(function (id) {
-      var s = sessions[id];
+    Object.keys(src).forEach(function (id) {
+      var s = src[id];
       if (!byDate[s.date]) byDate[s.date] = [];
       byDate[s.date].push(s);
     });
@@ -2262,7 +2268,29 @@
   function agendaHtml(daySessions) {
     var sorted = daySessions.slice().sort(function (a, b) { return a.time < b.time ? -1 : 1; });
     if (sorted.length === 0) return '<div class="empty-mini">Aucune séance ce jour-là.</div>';
+    if (viewMode === "global") return sorted.map(function (s) { return globalRowHtml(s); }).join("");
     return sorted.map(function (s) { return sessionCardHtml(s); }).join("");
+  }
+  function globalRowHtml(s) {
+    return '<div class="list-row" data-goto-team="' + s.teamId + '" data-goto-date="' + s.date + '" style="cursor:pointer;">' +
+      '<span><span class="lr-main">' + escapeHtml(s.time) + ' · ' + escapeHtml(sessionLabel(s)) + '</span>' +
+      '<div class="lr-sub">' + escapeHtml(s.teamName || "?") + ' · ' + escapeHtml(s.gymName || "") + (s.court ? " (" + escapeHtml(s.court) + ")" : "") + '</div></span>' +
+      '<span class="lr-main" style="color:var(--accent);">Ouvrir →</span></div>';
+  }
+  function wireGlobalRows(container) {
+    Array.prototype.forEach.call(container.querySelectorAll("[data-goto-team]"), function (row) {
+      row.addEventListener("click", function () {
+        var tid = row.getAttribute("data-goto-team");
+        var date = row.getAttribute("data-goto-date");
+        selectTeam(tid);
+        selectedCalDay = date;
+        calSubView = "day";
+        setViewMode("calendar");
+        Array.prototype.forEach.call(document.querySelectorAll("#calTabs .tab"), function (t) {
+          t.classList.toggle("active", t.getAttribute("data-cal-view") === "day");
+        });
+      });
+    });
   }
   function renderCalendarView() {
     var el = document.getElementById("calendarView");
@@ -2314,7 +2342,7 @@
         renderCalendarView();
       });
     });
-    wireSessionCardEvents(el);
+    if (viewMode === "global") wireGlobalRows(el); else wireSessionCardEvents(el);
   }
   function renderWeekCalView(el) {
     var ref = new Date(selectedCalDay + "T00:00:00");
@@ -2367,7 +2395,7 @@
         renderCalendarView();
       });
     });
-    wireSessionCardEvents(el);
+    if (viewMode === "global") wireGlobalRows(el); else wireSessionCardEvents(el);
   }
   function renderDayCalView(el) {
     var d = new Date(selectedCalDay + "T00:00:00");
@@ -2389,12 +2417,18 @@
         renderCalendarView();
       });
     });
-    wireSessionCardEvents(el);
+    if (viewMode === "global") wireGlobalRows(el); else wireSessionCardEvents(el);
   }
   function renderSessionList() {
     var list = document.getElementById("sessionList");
     var calView = document.getElementById("calendarView");
     if (!identity) { list.innerHTML = ""; calView.style.display = "none"; return; }
+    if (viewMode === "global") {
+      list.style.display = "none";
+      calView.style.display = "block";
+      renderCalendarView();
+      return;
+    }
     if (!teamId) {
       calView.style.display = "none";
       list.style.display = "block";
@@ -2688,6 +2722,7 @@
     try { localStorage.removeItem("creneau_admin"); } catch (e) {}
     toast("Mode administrateur désactivé sur cet appareil");
     document.getElementById("onboardOverlay").classList.remove("show");
+    if (viewMode === "global") setViewMode("list");
     if (dbReady) subscribeMyAssignment();
     renderAll();
   });
@@ -2743,16 +2778,39 @@
       renderCalendarView();
     });
   });
+  function subscribeGlobalSessions() {
+    if (globalSessionsUnsub || !dbReady) return;
+    globalSessionsUnsub = db.collectionGroup("sessions").onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) {
+        var tid = d.ref.parent.parent.id;
+        next[d.id] = Object.assign({ id: d.id, teamId: tid, teamName: teams[tid] ? teams[tid].name : "?" }, d.data());
+      });
+      globalSessions = next;
+      if (viewMode === "global") renderAll();
+    }, function (err) {
+      console.error("[global] erreur collectionGroup", err);
+      toast("Erreur de chargement du calendrier global");
+    });
+  }
+  function unsubscribeGlobalSessions() {
+    if (globalSessionsUnsub) { try { globalSessionsUnsub(); } catch (e) {} globalSessionsUnsub = null; }
+  }
   function setViewMode(mode) {
     viewMode = mode;
     document.getElementById("viewModeList").classList.toggle("active", mode === "list");
     document.getElementById("viewModeCalendar").classList.toggle("active", mode === "calendar");
+    var globalBtn = document.getElementById("viewModeGlobal");
+    if (globalBtn) globalBtn.classList.toggle("active", mode === "global");
     document.getElementById("listTabs").style.display = mode === "list" ? "flex" : "none";
-    document.getElementById("calTabs").style.display = mode === "calendar" ? "flex" : "none";
+    document.getElementById("calTabs").style.display = (mode === "calendar" || mode === "global") ? "flex" : "none";
+    if (mode === "global") { subscribeGlobalSessions(); } else { unsubscribeGlobalSessions(); }
     renderAll();
   }
   document.getElementById("viewModeList").addEventListener("click", function () { setViewMode("list"); });
   document.getElementById("viewModeCalendar").addEventListener("click", function () { setViewMode("calendar"); });
+  var viewModeGlobalBtn = document.getElementById("viewModeGlobal");
+  if (viewModeGlobalBtn) viewModeGlobalBtn.addEventListener("click", function () { setViewMode("global"); });
   Array.prototype.forEach.call(document.querySelectorAll(".overlay"), function (ov) {
     ov.addEventListener("click", function (e) {
       if (e.target !== ov) return;

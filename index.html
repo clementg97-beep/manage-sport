@@ -378,6 +378,18 @@
   }
   .team-row.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
   .empty-mini { font-size: 13px; color: var(--text-muted); text-align: center; padding: 18px 6px; }
+  .admin-table-wrap { overflow-x: auto; }
+  .admin-table { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+  .admin-table th {
+    text-align: left; font-size: 10px; font-weight: 800; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.02em; padding: 6px 10px 8px;
+  }
+  .admin-table td { padding: 8px 10px; vertical-align: middle; }
+  .admin-table tbody tr:nth-child(even) { background: var(--bg); }
+  .admin-table td:first-child, .admin-table th:first-child { border-radius: 8px 0 0 8px; }
+  .admin-table td:last-child, .admin-table th:last-child { border-radius: 0 8px 8px 0; }
+  .admin-table select { width: auto; padding: 5px 8px; font-size: 11.5px; }
+  .admin-table .lr-del { white-space: nowrap; }
 
   .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .cal-header h3 { margin: 0; font-size: 15px; font-weight: 800; text-transform: capitalize; }
@@ -2042,18 +2054,21 @@
       el.innerHTML = '<div class="empty-mini">' + (playersFilterTeamId ? "Aucun joueur dans cette équipe." : "Personne n'a encore rejoint d'équipe.") + '</div>';
       return;
     }
-    el.innerHTML = slugs.map(function (slug) {
+    var rows = slugs.map(function (slug) {
       var a = allAssignments[slug];
       var options = teamIds.map(function (tid) {
         return '<option value="' + tid + '"' + (tid === a.teamId ? " selected" : "") + '>' + escapeHtml(teams[tid].name) + '</option>';
       }).join("");
-      return '<div class="list-row" style="align-items:flex-start;"><span>' +
-        '<span class="lr-main">' + escapeHtml(a.name) + '</span>' +
-        '<div class="lr-sub">' + escapeHtml(a.email || "—") + '</div></span>' +
-        '<span style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">' +
-        '<select data-slug="' + slug + '" style="width:auto; padding:6px 8px; font-size:12.5px;">' + options + '</select>' +
-        '<button type="button" class="lr-del" data-remove="' + slug + '">Retirer</button></span></div>';
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(a.name) + '</strong></td>' +
+        '<td>' + escapeHtml(a.email || "—") + '</td>' +
+        '<td><select data-slug="' + slug + '">' + options + '</select></td>' +
+        '<td><button type="button" class="lr-del" data-remove="' + slug + '">Retirer</button></td>' +
+        '</tr>';
     }).join("");
+    el.innerHTML = '<div class="admin-table-wrap"><table class="admin-table">' +
+      '<thead><tr><th>Nom</th><th>Courriel</th><th>Équipe</th><th></th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div>';
     Array.prototype.forEach.call(el.querySelectorAll("select[data-slug]"), function (sel) {
       sel.addEventListener("change", function () {
         var slug = sel.getAttribute("data-slug");

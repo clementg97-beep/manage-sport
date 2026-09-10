@@ -182,6 +182,12 @@
     cursor: pointer;
   }
   .tab.active { background: var(--accent); color: var(--accent-ink); }
+  .admin-tab {
+    flex: 1; border: none; background: transparent; color: var(--text-muted);
+    padding: 8px 4px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+  .admin-tab.active { background: var(--accent); color: var(--accent-ink); }
 
   .date-heading {
     font-size: 12.5px; font-weight: 800; color: var(--text-muted); text-transform: capitalize;
@@ -489,32 +495,47 @@
     <h2>Administration</h2>
     <div class="hint" id="adminTeamHint" style="margin-top:-10px;">—</div>
 
-    <h3>Coachs autorisés pour cette équipe</h3>
-    <div class="inline-add">
-      <input type="text" id="newCoachName" placeholder="Nom du coach" maxlength="40">
-      <button type="button" id="newCoachAdd">Ajouter</button>
+    <div class="tabs" style="margin-bottom:18px;">
+      <button class="admin-tab active" data-admin-tab="gyms">🏟️ Gymnases</button>
+      <button class="admin-tab" data-admin-tab="players">🏃 Joueurs</button>
+      <button class="admin-tab" data-admin-tab="coachs">📋 Coachs</button>
+      <button class="admin-tab" data-admin-tab="admins">🔑 Admins</button>
     </div>
-    <div id="coachWhitelistList"></div>
 
-    <h3>Gymnases (partagés entre équipes)</h3>
-    <div class="inline-add" style="flex-direction:column; align-items:stretch;">
-      <input type="text" id="newGymName" placeholder="Nom du gymnase" maxlength="60" style="margin-bottom:8px;">
-      <input type="text" id="newGymAddress" placeholder="Adresse complète" maxlength="120" style="margin-bottom:8px;">
-      <button type="button" id="newGymAdd">Ajouter le gymnase</button>
+    <div class="admin-panel" data-admin-panel="gyms">
+      <h3>Gymnases (partagés entre équipes)</h3>
+      <div class="inline-add" style="flex-direction:column; align-items:stretch;">
+        <input type="text" id="newGymName" placeholder="Nom du gymnase" maxlength="60" style="margin-bottom:8px;">
+        <input type="text" id="newGymAddress" placeholder="Adresse complète" maxlength="120" style="margin-bottom:8px;">
+        <button type="button" id="newGymAdd">Ajouter le gymnase</button>
+      </div>
+      <div id="gymList2"></div>
     </div>
-    <div id="gymList2"></div>
 
-    <h3>Membres (toutes équipes)</h3>
-    <div class="hint" style="margin-top:-4px;">Joueurs et coachs sont verrouillés sur leur équipe une fois assignés — change leur équipe ici si besoin.</div>
-    <div id="membersList"></div>
-
-    <h3>Administrateurs</h3>
-    <div class="hint" style="margin-top:-4px;">Ces personnes peuvent débloquer le mode admin avec le même code, en plus de l'administrateur principal.</div>
-    <div class="inline-add">
-      <input type="text" id="newAdminName" placeholder="Nom complet exact" maxlength="40">
-      <button type="button" id="newAdminAdd">Ajouter</button>
+    <div class="admin-panel" data-admin-panel="players" style="display:none;">
+      <h3>Joueurs (toutes équipes)</h3>
+      <div class="hint" style="margin-top:-4px;">Un joueur est verrouillé sur son équipe une fois assigné — change son équipe ici si besoin.</div>
+      <div id="membersList"></div>
     </div>
-    <div id="adminsList"></div>
+
+    <div class="admin-panel" data-admin-panel="coachs" style="display:none;">
+      <h3>Coachs autorisés pour cette équipe</h3>
+      <div class="inline-add">
+        <input type="text" id="newCoachName" placeholder="Nom du coach" maxlength="40">
+        <button type="button" id="newCoachAdd">Ajouter</button>
+      </div>
+      <div id="coachWhitelistList"></div>
+    </div>
+
+    <div class="admin-panel" data-admin-panel="admins" style="display:none;">
+      <h3>Administrateurs</h3>
+      <div class="hint" style="margin-top:-4px;">Ces personnes peuvent débloquer le mode admin avec le même code, en plus de l'administrateur principal.</div>
+      <div class="inline-add">
+        <input type="text" id="newAdminName" placeholder="Nom complet exact" maxlength="40">
+        <button type="button" id="newAdminAdd">Ajouter</button>
+      </div>
+      <div id="adminsList"></div>
+    </div>
 
     <button class="btn-secondary" id="adminClose">Fermer</button>
   </div>
@@ -1506,8 +1527,20 @@
     adminsCol().doc(slug).delete().then(function () { toast("Administrateur retiré"); })
       .catch(function () { toast("Erreur"); });
   }
+  function setAdminTab(tab) {
+    Array.prototype.forEach.call(document.querySelectorAll(".admin-tab"), function (btn) {
+      btn.classList.toggle("active", btn.getAttribute("data-admin-tab") === tab);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".admin-panel"), function (panel) {
+      panel.style.display = panel.getAttribute("data-admin-panel") === tab ? "block" : "none";
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".admin-tab"), function (btn) {
+    btn.addEventListener("click", function () { setAdminTab(btn.getAttribute("data-admin-tab")); });
+  });
   function openAdminOverlay() {
     document.getElementById("adminTeamHint").textContent = teamId && teams[teamId] ? ("Équipe active : " + teams[teamId].name) : "Choisis d'abord une équipe.";
+    setAdminTab("gyms");
     renderAdminCoachList();
     renderAdminGymList();
     renderAdminMembersList();

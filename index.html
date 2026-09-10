@@ -1005,6 +1005,9 @@
         name: identity.name, slug: slug, teamId: teamId, updatedAt: new Date().toISOString()
       }).catch(function () {});
     }
+    if (myAssignment && myAssignment.teamId) {
+      assignmentsCol().doc(slug).set({ email: identity.email || "" }, { merge: true }).catch(function () {});
+    }
   }
   // effectiveRole() is the PARTICIPATION role — decides whether this
   // person sees availability chips and counts as a player in rosters.
@@ -1292,7 +1295,7 @@
     if (!isAdmin) {
       if (myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe."); return; }
       assignmentsCol().doc(slugify(identity.name)).set({
-        name: identity.name, teamId: id, updatedAt: new Date().toISOString(), updatedBy: identity.name
+        name: identity.name, teamId: id, email: identity.email || "", updatedAt: new Date().toISOString(), updatedBy: identity.name
       }).catch(function () {});
     }
     selectTeam(id);
@@ -2044,8 +2047,12 @@
       var options = teamIds.map(function (tid) {
         return '<option value="' + tid + '"' + (tid === a.teamId ? " selected" : "") + '>' + escapeHtml(teams[tid].name) + '</option>';
       }).join("");
-      return '<div class="list-row"><span class="lr-main">' + escapeHtml(a.name) + '</span>' +
-        '<select data-slug="' + slug + '" style="width:auto; padding:6px 8px; font-size:12.5px;">' + options + '</select></div>';
+      return '<div class="list-row" style="align-items:flex-start;"><span>' +
+        '<span class="lr-main">' + escapeHtml(a.name) + '</span>' +
+        '<div class="lr-sub">' + escapeHtml(a.email || "—") + '</div></span>' +
+        '<span style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">' +
+        '<select data-slug="' + slug + '" style="width:auto; padding:6px 8px; font-size:12.5px;">' + options + '</select>' +
+        '<button type="button" class="lr-del" data-remove="' + slug + '">Retirer</button></span></div>';
     }).join("");
     Array.prototype.forEach.call(el.querySelectorAll("select[data-slug]"), function (sel) {
       sel.addEventListener("change", function () {
@@ -2055,6 +2062,19 @@
           .catch(function () { toast("Erreur"); });
       });
     });
+    Array.prototype.forEach.call(el.querySelectorAll("[data-remove]"), function (btn) {
+      btn.addEventListener("click", function () { removePlayer(btn.getAttribute("data-remove")); });
+    });
+  }
+  function removePlayer(slug) {
+    if (!dbReady) return;
+    var a = allAssignments[slug];
+    if (!a) return;
+    if (!confirm("Retirer " + a.name + " de son équipe et de la liste des joueurs ?")) return;
+    var tasks = [assignmentsCol().doc(slug).delete().catch(function () {})];
+    if (a.teamId) tasks.push(peopleCol(a.teamId).doc(slug).delete().catch(function () {}));
+    if (a.email) tasks.push(emailDirectoryCol().doc(emailKey(a.email)).delete().catch(function () {}));
+    Promise.all(tasks).then(function () { toast(a.name + " retiré"); });
   }
   function renderAdminAdminsList() {
     var el = document.getElementById("adminsList");

@@ -280,6 +280,7 @@
   }
   .overlay.show { display: flex; }
   @media (min-width: 640px) { .overlay { align-items: center; } }
+  #lineupPickerOverlay, #photoPickerOverlay { z-index: 60; }
 
   .sheet {
     background: var(--bg-raised); width: 100%; max-width: 520px;
@@ -1466,7 +1467,7 @@
     var bench = teamPlayerNames().filter(function (n) { return assigned.indexOf(n) === -1; });
     var hint = document.getElementById("lineupBenchHint");
     if (!hint) return;
-    hint.innerHTML = '<strong>🪑 Banc</strong><br>' + benchGroupedHtml(bench);
+    hint.innerHTML = '<strong>Reste équipe</strong><br>' + benchGroupedHtml(bench);
   }
   function renderGymSelect(selectedId) {
     var sel = document.getElementById("fGymSelect");
@@ -2003,7 +2004,7 @@
         html += '</ul>';
         var assignedNames = filledPositions.map(function (p) { return s.lineup[p.key]; });
         var bench = teamPlayerNames().filter(function (n) { return assignedNames.indexOf(n) === -1; });
-        if (bench.length) html += '<div class="card-coaches" style="padding:0 14px 10px;">🪑 <strong>Banc</strong>' + benchGroupedHtml(bench) + '</div>';
+        if (bench.length) html += '<div class="card-coaches" style="padding:0 14px 10px;"><strong>Reste équipe</strong>' + benchGroupedHtml(bench) + '</div>';
       }
     }
 

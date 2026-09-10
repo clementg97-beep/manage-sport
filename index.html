@@ -1464,6 +1464,7 @@
       currentEditingSet = nextNum;
       renderSetTabs();
       paintLineupCourt();
+      persistSetsIfEditing();
     });
   }
   function paintLineupCourt() {
@@ -1484,10 +1485,17 @@
     validateBtn.classList.toggle("btn-secondary", !published);
     updateLineupBenchHint();
   }
+  function persistSetsIfEditing() {
+    if (!editingSessionId || !dbReady || !teamId) return;
+    sessionsCol(teamId).doc(editingSessionId).update({ sets: setsDraft, updatedAt: new Date().toISOString() })
+      .catch(function () { toast("Erreur de synchronisation"); });
+  }
   document.getElementById("validateSetBtn").addEventListener("click", function () {
     setsDraft[currentEditingSet].published = !setsDraft[currentEditingSet].published;
     renderSetTabs();
     paintLineupCourt();
+    persistSetsIfEditing();
+    if (editingSessionId) toast(setsDraft[currentEditingSet].published ? "Set " + currentEditingSet + " validé — visible des joueurs" : "Validation annulée pour ce set");
   });
   function lineupPosHtml(p) {
     var name = setsDraft[currentEditingSet].positions[p.key];
@@ -1514,6 +1522,7 @@
         setsDraft[currentEditingSet].positions[posKey] = row.getAttribute("data-pick");
         document.getElementById("lineupPickerOverlay").classList.remove("show");
         paintLineupCourt();
+        persistSetsIfEditing();
       });
     });
     document.getElementById("lineupPickerOverlay").classList.add("show");

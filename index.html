@@ -698,6 +698,10 @@
         <div class="type-opt" data-type="match">🏆 Match</div>
       </div>
     </label>
+    <label class="field" id="opponentField" style="display:none;">
+      <span class="lbl">Adversaire (optionnel)</span>
+      <input type="text" id="fOpponent" placeholder="Ex. CEGEP Vieux-Montréal" maxlength="60">
+    </label>
     <div class="row2">
       <label class="field">
         <span class="lbl">Date</span>
@@ -910,7 +914,8 @@
     return h > 0 && h <= 6;
   }
   function sessionLabel(s) {
-    return s.type === "match" ? "Match" : "Pratique";
+    if (s.type !== "match") return "Pratique";
+    return s.opponent ? "Match vs " + s.opponent : "Match";
   }
   function initials(name) {
     return (name || "?").trim().slice(0,2).toUpperCase();
@@ -1376,6 +1381,7 @@
       el.classList.toggle("sel", el.getAttribute("data-type") === type);
     });
     document.getElementById("lineupSection").style.display = type === "match" ? "block" : "none";
+    document.getElementById("opponentField").style.display = type === "match" ? "block" : "none";
   }
   function openSessionSheet(id) {
     editingSessionId = id || null;
@@ -1388,6 +1394,7 @@
     document.getElementById("fCourt").value = s ? s.court : "";
     document.getElementById("fNotes").value = s ? (s.notes || "") : "";
     document.getElementById("fLink").value = s ? (s.link || "") : "";
+    document.getElementById("fOpponent").value = s ? (s.opponent || "") : "";
 
     document.getElementById("fRepeatField").style.display = id ? "none" : "block";
     document.getElementById("fRepeat").checked = false;
@@ -1685,6 +1692,7 @@
       coaches: coachSelection,
       notes: document.getElementById("fNotes").value.trim(),
       link: document.getElementById("fLink").value.trim(),
+      opponent: selectedType === "match" ? document.getElementById("fOpponent").value.trim() : "",
       sets: selectedType === "match" ? readLineupFromForm() : null,
       createdBy: identity ? identity.name : "inconnu",
       updatedAt: new Date().toISOString()

@@ -536,11 +536,6 @@
     <button class="view-mode-btn" id="viewModeTeam" style="display:none;">👥 Équipe</button>
   </div>
 
-  <div class="tabs" id="listTabs">
-    <button class="tab active" data-tab="upcoming">📝 À venir</button>
-    <button class="tab" data-tab="past">📭 Passées</button>
-  </div>
-
   <div class="tabs" id="calTabs" style="display:none;">
     <button class="tab active" data-cal-view="month">🗓️ Mois</button>
     <button class="tab" data-cal-view="week">📆 Semaine</button>
@@ -2968,14 +2963,6 @@
   document.getElementById("fabAdd").addEventListener("click", function () { openSessionSheet(null); });
   document.getElementById("sessionCancel").addEventListener("click", closeSessionSheet);
   document.getElementById("sessionSave").addEventListener("click", saveSession);
-  Array.prototype.forEach.call(document.querySelectorAll("#listTabs .tab"), function (t) {
-    t.addEventListener("click", function () {
-      Array.prototype.forEach.call(document.querySelectorAll("#listTabs .tab"), function (x) { x.classList.remove("active"); });
-      t.classList.add("active");
-      currentTab = t.getAttribute("data-tab");
-      renderAll();
-    });
-  });
   Array.prototype.forEach.call(document.querySelectorAll("#calTabs .tab"), function (t) {
     t.addEventListener("click", function () {
       Array.prototype.forEach.call(document.querySelectorAll("#calTabs .tab"), function (x) { x.classList.remove("active"); });
@@ -3007,7 +2994,6 @@
     document.getElementById("viewModeList").classList.toggle("active", mode === "list");
     document.getElementById("viewModeCalendar").classList.toggle("active", mode === "calendar");
     document.getElementById("viewModeTeam").classList.toggle("active", mode === "team");
-    document.getElementById("listTabs").style.display = mode === "list" ? "flex" : "none";
     document.getElementById("calTabs").style.display = mode === "calendar" ? "flex" : "none";
     document.getElementById("typeTabs").style.display = (mode === "list" && isGlobalTeam) ? "flex" : "none";
     renderAll();

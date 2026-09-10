@@ -2892,7 +2892,7 @@
   document.getElementById("onboardName").addEventListener("blur", function () {
     tryPrefillFromExistingProfile(this.value.trim());
   });
-  document.getElementById("identityChip").addEventListener("click", function () {
+  function openProfileOverlay() {
     document.getElementById("onboardTitle").textContent = "Ton profil";
     document.getElementById("onboardName").value = identity ? identity.name : "";
     document.getElementById("onboardEmail").value = identity ? (identity.email || "") : "";
@@ -2904,7 +2904,8 @@
     document.getElementById("adminActiveHint").style.display = isAdmin ? "block" : "none";
     document.getElementById("adminLogoutLink").style.display = isAdmin ? "block" : "none";
     document.getElementById("onboardOverlay").classList.add("show");
-  });
+  }
+  document.getElementById("identityChip").addEventListener("click", openProfileOverlay);
   document.getElementById("onboardCancel").addEventListener("click", function () {
     document.getElementById("onboardOverlay").classList.remove("show");
   });
@@ -3044,6 +3045,9 @@
   if (!identity) {
     populatePositionSelects("", "");
     document.getElementById("onboardOverlay").classList.add("show");
+  } else if (!identity.email) {
+    openProfileOverlay();
+    toast("Ajoute ton courriel pour recevoir les notifications de nouvelles séances");
   }
   renderAll();
   initDb();

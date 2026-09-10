@@ -691,6 +691,10 @@
   <div class="sheet">
     <div class="sheet-handle"></div>
     <h2 id="sessionSheetTitle">Nouvelle séance</h2>
+    <label class="field" id="fTeamField" style="display:none;">
+      <span class="lbl">Équipe</span>
+      <select id="fTeamSelect"></select>
+    </label>
     <label class="field">
       <span class="lbl">Type de séance</span>
       <div class="role-toggle">
@@ -1037,7 +1041,7 @@
     var roleLabel = (role === "coach" ? "Coach" : (isPendingCoach() ? "Joueur (coach en attente)" : "Joueur")) + (isAdmin ? " · Admin" : "");
     document.getElementById("chipRole").textContent = roleLabel;
     document.getElementById("avatarInit").textContent = initials(identity.name);
-    document.getElementById("fabAdd").style.display = (canCreateSessions() && teamId && !isGlobalTeam) ? "flex" : "none";
+    document.getElementById("fabAdd").style.display = (canCreateSessions() && (teamId || isGlobalTeam)) ? "flex" : "none";
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
     document.getElementById("icsExportBtn").style.display = (teamId && !isGlobalTeam) ? "block" : "none";
   }
@@ -1422,7 +1426,13 @@
     document.getElementById("fNewGymAddress").value = "";
     renderGymSelect(s ? s.gymId : null);
     populateCourtList();
-    populateCoachPicker(s ? s.coaches || [] : (identity ? [identity.name] : []));
+    var creatingInGlobal = !id && isGlobalTeam;
+    document.getElementById("fTeamField").style.display = creatingInGlobal ? "block" : "none";
+    if (creatingInGlobal) {
+      populateFTeamSelect();
+    } else {
+      populateCoachPicker(s ? s.coaches || [] : (identity ? [identity.name] : []));
+    }
     populateLineupSelects(s ? s.sets : null);
     document.getElementById("sessionOverlay").classList.add("show");
   }
@@ -1658,9 +1668,22 @@
     document.getElementById("courtList").innerHTML = Object.keys(courts).map(function (c) { return '<option value="' + escapeHtml(c) + '">'; }).join("");
   }
   var coachSelection = [];
-  function populateCoachPicker(preselected) {
+  function populateFTeamSelect() {
+    var sel = document.getElementById("fTeamSelect");
+    var ids = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
+    sel.innerHTML = ids.map(function (tid) { return '<option value="' + tid + '">' + escapeHtml(teams[tid].name) + '</option>'; }).join("");
+    onFTeamSelectChange();
+  }
+  function onFTeamSelectChange() {
+    var tid = document.getElementById("fTeamSelect").value;
+    populateCoachPicker(identity ? [identity.name] : [], tid);
+  }
+  document.getElementById("fTeamSelect").addEventListener("change", onFTeamSelectChange);
+  function populateCoachPicker(preselected, forTeamId) {
     coachSelection = preselected.slice();
-    var coachList = Object.keys(coachWhitelist).map(function (k) { return coachWhitelist[k]; });
+    var coachList = forTeamId
+      ? Object.keys(allCoachGrants).filter(function (k) { return allCoachGrants[k].teamId === forTeamId; }).map(function (k) { return allCoachGrants[k]; })
+      : Object.keys(coachWhitelist).map(function (k) { return coachWhitelist[k]; });
     if (isAdmin && identity && !coachList.find(function (p) { return p.name === identity.name; })) {
       coachList.push({ name: identity.name });
     }
@@ -1690,7 +1713,8 @@
     editingSessionId = null;
   }
   function saveSession() {
-    if (!teamId) { toast("Choisis d'abord une équipe"); return; }
+    var targetTeamId = (!editingSessionId && isGlobalTeam) ? document.getElementById("fTeamSelect").value : teamId;
+    if (!targetTeamId) { toast("Choisis d'abord une équipe"); return; }
     var date = document.getElementById("fDate").value;
     var time = document.getElementById("fTime").value;
     if (!date || !time) { toast("Date et heure requises"); return; }
@@ -1717,7 +1741,7 @@
 
     if (editingSessionId) {
       var updateData = Object.assign({ date: date, datetime: date + "T" + time }, baseData);
-      sessionsCol(teamId).doc(editingSessionId).update(updateData)
+      sessionsCol(targetTeamId).doc(editingSessionId).update(updateData)
         .then(function () { toast("Séance mise à jour"); closeSessionSheet(); })
         .catch(function () { toast("Erreur d'enregistrement"); });
       return;
@@ -1743,11 +1767,11 @@
       var docData = Object.assign({}, baseData, { date: d, datetime: d + "T" + time, createdAt: new Date().toISOString() });
       if (seriesId) docData.seriesId = seriesId;
       if (!firstData) firstData = docData;
-      batch.set(sessionsCol(teamId).doc(), docData);
+      batch.set(sessionsCol(targetTeamId).doc(), docData);
     });
     batch.commit().then(function () {
       toast(dates.length > 1 ? (dates.length + " séances créées") : "Séance créée");
-      sendNewSessionEmails(teamId, firstData);
+      sendNewSessionEmails(targetTeamId, firstData);
       closeSessionSheet();
     }).catch(function () { toast("Erreur d'enregistrement"); });
   }

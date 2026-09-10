@@ -82,19 +82,7 @@
     margin: 0; padding: 0; background: var(--bg); color: var(--text);
     font-family: var(--font); -webkit-font-smoothing: antialiased;
   }
-  body { min-height: 100vh; padding-bottom: 172px; }
-  .bottom-nav {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex;
-    background: var(--bg-card); border-top: 1px solid var(--border);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .bottom-nav-btn {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
-    padding: 10px 4px 8px; border: none; background: transparent; color: var(--text-muted);
-    font-size: 11px; font-weight: 700; cursor: pointer;
-  }
-  .bottom-nav-btn .bn-icon { font-size: 20px; }
-  .bottom-nav-btn.active { color: var(--accent); }
+  body { min-height: 100vh; padding-bottom: 96px; }
   button { font-family: var(--font); }
   ::selection { background: var(--accent-soft); }
 
@@ -278,7 +266,7 @@
   .empty .e-sub { font-size: 13px; line-height: 1.5; }
 
   .fab {
-    position: fixed; right: 18px; bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     height: 52px; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
     border: none; font-size: 15px; font-weight: 800; box-shadow: 0 6px 20px rgba(0,0,0,0.25); cursor: pointer;
     display: flex; align-items: center; justify-content: center; gap: 6px; z-index: 25;
@@ -545,6 +533,7 @@
   <div class="view-toggle" id="listCalToggle">
     <button class="view-mode-btn active" id="viewModeList">📋 Liste</button>
     <button class="view-mode-btn" id="viewModeCalendar">🗓️ Calendrier</button>
+    <button class="view-mode-btn" id="viewModeTeam" style="display:none;">👥 Équipe</button>
   </div>
 
   <div class="tabs" id="listTabs">
@@ -570,15 +559,6 @@
   <div id="teamView" style="display:none;"></div>
   <div id="sessionList"></div>
 </main>
-
-<nav class="bottom-nav" id="bottomNav" style="display:none;">
-  <button type="button" class="bottom-nav-btn active" id="bottomNavCalendar">
-    <span class="bn-icon">📅</span><span>Calendrier</span>
-  </button>
-  <button type="button" class="bottom-nav-btn" id="bottomNavTeam">
-    <span class="bn-icon">👥</span><span>Équipe</span>
-  </button>
-</nav>
 
 <button class="fab" id="fabAdd" style="display:none;" title="Nouvelle séance">+ Ajouter un événement</button>
 
@@ -1098,7 +1078,8 @@
     document.getElementById("fabAdd").style.display = (canCreateSessions() && (teamId || isGlobalTeam)) ? "flex" : "none";
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
     document.getElementById("icsExportBtn").style.display = (teamId && !isGlobalTeam) ? "block" : "none";
-    document.getElementById("bottomNav").style.display = "flex";
+    document.getElementById("viewModeTeam").style.display = (teamId && !isGlobalTeam) ? "" : "none";
+    document.getElementById("typeTabs").style.display = (viewMode === "list" && canManageTeam()) ? "flex" : "none";
     if ((!teamId || isGlobalTeam) && viewMode === "team") setViewMode("list");
   }
 
@@ -3024,20 +3005,21 @@
     viewMode = mode;
     document.getElementById("viewModeList").classList.toggle("active", mode === "list");
     document.getElementById("viewModeCalendar").classList.toggle("active", mode === "calendar");
-    document.getElementById("listCalToggle").style.display = mode === "team" ? "none" : "flex";
+    document.getElementById("viewModeTeam").classList.toggle("active", mode === "team");
     document.getElementById("listTabs").style.display = mode === "list" ? "flex" : "none";
     document.getElementById("calTabs").style.display = mode === "calendar" ? "flex" : "none";
-    document.getElementById("typeTabs").style.display = mode === "list" ? "flex" : "none";
-    document.getElementById("bottomNavCalendar").classList.toggle("active", mode !== "team");
-    document.getElementById("bottomNavTeam").classList.toggle("active", mode === "team");
+    document.getElementById("typeTabs").style.display = (mode === "list" && canManageTeam()) ? "flex" : "none";
+    if (!canManageTeam() && typeFilter !== "all") {
+      typeFilter = "all";
+      Array.prototype.forEach.call(document.querySelectorAll("#typeTabs .tab"), function (x) {
+        x.classList.toggle("active", x.getAttribute("data-type-filter") === "all");
+      });
+    }
     renderAll();
   }
   document.getElementById("viewModeList").addEventListener("click", function () { setViewMode("list"); });
   document.getElementById("viewModeCalendar").addEventListener("click", function () { setViewMode("calendar"); });
-  document.getElementById("bottomNavCalendar").addEventListener("click", function () {
-    setViewMode(viewMode === "team" ? "list" : viewMode);
-  });
-  document.getElementById("bottomNavTeam").addEventListener("click", function () {
+  document.getElementById("viewModeTeam").addEventListener("click", function () {
     if (!teamId || isGlobalTeam) { toast("Choisis d'abord une équipe pour voir son effectif."); return; }
     setViewMode("team");
   });

@@ -533,6 +533,7 @@
   <div class="view-toggle">
     <button class="view-mode-btn active" id="viewModeList">📋 Liste</button>
     <button class="view-mode-btn" id="viewModeCalendar">🗓️ Calendrier</button>
+    <button class="view-mode-btn" id="viewModeTeam" style="display:none;">👥 Équipe</button>
   </div>
 
   <div class="tabs" id="listTabs">
@@ -546,9 +547,16 @@
     <button class="tab" data-cal-view="day">📋 Jour</button>
   </div>
 
+  <div class="tabs" id="typeTabs" style="margin-top:-8px;">
+    <button class="tab active" data-type-filter="all">Tous</button>
+    <button class="tab" data-type-filter="pratique">Pratiques</button>
+    <button class="tab" data-type-filter="match">Matchs</button>
+  </div>
+
   <button type="button" class="link-btn" id="icsExportBtn" style="display:none; margin-bottom:10px;">📤 Exporter vers mon calendrier (.ics)</button>
 
   <div id="calendarView" style="display:none;"></div>
+  <div id="teamView" style="display:none;"></div>
   <div id="sessionList"></div>
 </main>
 
@@ -953,6 +961,8 @@
   var people = {};          // slug -> {name, role} (current team)
   var coachWhitelist = {};  // slug -> {name} (current team)
   var currentTab = "upcoming";
+  var typeFilter = "all"; // "all" | "pratique" | "match"
+  var upcomingExpanded = false; // À venir montre 2 semaines par défaut
   var viewMode = "list";   // "list" | "calendar" | "global" (global = admin-only, all teams)
   var calSubView = "month"; // "month" | "week" | "day"
   var calendarMonth = new Date(); calendarMonth.setDate(1);
@@ -1068,6 +1078,12 @@
     document.getElementById("fabAdd").style.display = (canCreateSessions() && (teamId || isGlobalTeam)) ? "flex" : "none";
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
     document.getElementById("icsExportBtn").style.display = (teamId && !isGlobalTeam) ? "block" : "none";
+    var teamModeBtn = document.getElementById("viewModeTeam");
+    if (teamModeBtn) {
+      var showTeamMode = teamId && !isGlobalTeam;
+      teamModeBtn.style.display = showTeamMode ? "block" : "none";
+      if (!showTeamMode && viewMode === "team") setViewMode("list");
+    }
   }
 
   // ---------- db path helpers ----------
@@ -2244,6 +2260,37 @@
     var pending = players.filter(function (p) { return answeredSlugs.indexOf(slugify(p.name)) === -1; });
     return { counts: counts, entries: entries, pendingCount: pending.length, pendingNames: pending.map(function(p){return p.name;}) };
   }
+  function computeLatestWellness() {
+    var latest = {};
+    Object.keys(availability).forEach(function (sid) {
+      Object.keys(availability[sid]).forEach(function (slug) {
+        var e = availability[sid][slug];
+        if (!e || (!e.mentalScore && !e.physicalScore)) return;
+        if (!latest[slug] || (e.updatedAt || "") > (latest[slug].updatedAt || "")) latest[slug] = e;
+      });
+    });
+    return latest;
+  }
+  function renderTeamView() {
+    var el = document.getElementById("teamView");
+    var players = Object.keys(people).filter(function (k) { return people[k].role === "joueur"; })
+      .map(function (k) { return people[k]; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+    if (players.length === 0) {
+      el.innerHTML = '<div class="empty-mini">Aucun joueur dans cette équipe pour l\'instant.</div>';
+      return;
+    }
+    var manage = canManageTeam();
+    var wellness = manage ? computeLatestWellness() : {};
+    var rows = players.map(function (p) {
+      var positions = [p.position, p.position2].filter(Boolean).map(function (r) { return ROLE_LABELS[r] || r; }).join(", ") || "—";
+      var w = wellness[slugify(p.name)];
+      var wellnessCell = manage ? '<td>' + (w ? "🧠 " + (w.mentalScore || "-") + "/10 · 💪 " + (w.physicalScore || "-") + "/10" : "—") + '</td>' : "";
+      return '<tr><td><strong>' + escapeHtml(p.name) + '</strong></td><td>' + escapeHtml(positions) + '</td>' + wellnessCell + '</tr>';
+    }).join("");
+    el.innerHTML = '<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Nom</th><th>Poste(s)</th>' +
+      (manage ? '<th>Forme récente</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      (manage ? '<div class="hint" style="margin-top:8px;">"Forme récente" = dernier mental/physique déclaré lors d\'une réponse Dispo. Visible uniquement par les coachs et l\'administrateur.</div>' : '');
+  }
   function sessionCardHtml(s) {
     var isPast = s.datetime < todayStr() + "T00:00";
     var role = effectiveRole();
@@ -2529,29 +2576,50 @@
   function renderSessionList() {
     var list = document.getElementById("sessionList");
     var calView = document.getElementById("calendarView");
-    if (!identity) { list.innerHTML = ""; calView.style.display = "none"; return; }
+    var teamViewEl = document.getElementById("teamView");
+    if (!identity) { list.innerHTML = ""; calView.style.display = "none"; teamViewEl.style.display = "none"; return; }
     if (!teamId && !isGlobalTeam) {
       calView.style.display = "none";
+      teamViewEl.style.display = "none";
       list.style.display = "block";
       list.innerHTML = '<div class="empty"><div class="e-icon">👥</div><div class="e-title">Choisis une équipe</div><div class="e-sub">Utilise le sélecteur en haut pour rejoindre une équipe.</div></div>';
       return;
     }
+    if (viewMode === "team") {
+      list.style.display = "none";
+      calView.style.display = "none";
+      teamViewEl.style.display = "block";
+      renderTeamView();
+      return;
+    }
     if (viewMode === "calendar") {
       list.style.display = "none";
+      teamViewEl.style.display = "none";
       calView.style.display = "block";
       renderCalendarView();
       return;
     }
     calView.style.display = "none";
+    teamViewEl.style.display = "none";
     list.style.display = "block";
     var src = isGlobalTeam ? globalSessions : sessions;
     var now = todayStr() + "T00:00";
     var ids = Object.keys(src).sort(function (a, b) { return src[a].datetime < src[b].datetime ? -1 : 1; });
     var filtered = ids.filter(function (id) {
       var s = src[id];
+      if (typeFilter !== "all" && s.type !== typeFilter) return false;
       return currentTab === "upcoming" ? s.datetime >= now : s.datetime < now;
     });
     if (currentTab === "past") filtered.reverse();
+
+    var hiddenBeyond = 0;
+    if (currentTab === "upcoming" && !upcomingExpanded) {
+      var cutoff = new Date(); cutoff.setDate(cutoff.getDate() + 14);
+      var cutoffStr = ymd(cutoff) + "T23:59";
+      var within = filtered.filter(function (id) { return src[id].datetime <= cutoffStr; });
+      hiddenBeyond = filtered.length - within.length;
+      filtered = within;
+    }
 
     if (filtered.length === 0) {
       if (currentTab === "upcoming") {
@@ -2572,8 +2640,13 @@
       }
       html += isGlobalTeam ? globalRowHtml(s) : sessionCardHtml(s);
     });
+    if (hiddenBeyond > 0) {
+      html += '<button type="button" class="btn-secondary" id="showMoreUpcoming">Voir plus loin (' + hiddenBeyond + ' de plus, au-delà de 2 semaines)</button>';
+    }
     list.innerHTML = html;
     if (isGlobalTeam) wireGlobalRows(list); else wireSessionCardEvents(list);
+    var showMoreBtn = document.getElementById("showMoreUpcoming");
+    if (showMoreBtn) showMoreBtn.addEventListener("click", function () { upcomingExpanded = true; renderSessionList(); });
   }
   function wireSessionCardEvents(container) {
     Array.prototype.forEach.call(container.querySelectorAll('[data-role="toggle-roster"]'), function (el) {
@@ -2935,12 +3008,23 @@
     viewMode = mode;
     document.getElementById("viewModeList").classList.toggle("active", mode === "list");
     document.getElementById("viewModeCalendar").classList.toggle("active", mode === "calendar");
+    document.getElementById("viewModeTeam").classList.toggle("active", mode === "team");
     document.getElementById("listTabs").style.display = mode === "list" ? "flex" : "none";
     document.getElementById("calTabs").style.display = mode === "calendar" ? "flex" : "none";
+    document.getElementById("typeTabs").style.display = mode === "list" ? "flex" : "none";
     renderAll();
   }
   document.getElementById("viewModeList").addEventListener("click", function () { setViewMode("list"); });
   document.getElementById("viewModeCalendar").addEventListener("click", function () { setViewMode("calendar"); });
+  document.getElementById("viewModeTeam").addEventListener("click", function () { setViewMode("team"); });
+  Array.prototype.forEach.call(document.querySelectorAll("#typeTabs .tab"), function (t) {
+    t.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll("#typeTabs .tab"), function (x) { x.classList.remove("active"); });
+      t.classList.add("active");
+      typeFilter = t.getAttribute("data-type-filter");
+      renderAll();
+    });
+  });
   Array.prototype.forEach.call(document.querySelectorAll(".overlay"), function (ov) {
     ov.addEventListener("click", function (e) {
       if (e.target !== ov) return;

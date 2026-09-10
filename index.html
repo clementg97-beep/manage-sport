@@ -724,6 +724,17 @@
       </label>
     </div>
     <div class="hint" id="noGymHint" style="display:none;">Aucun gymnase enregistré. Demande à un administrateur d'en ajouter un depuis Administration (⚙️).</div>
+    <div id="fNewGymBox" style="display:none; margin-bottom:14px;">
+      <input type="text" id="fNewGymName" placeholder="Nom du gymnase" maxlength="60" style="margin-bottom:8px;">
+      <div style="position:relative; margin-bottom:8px;">
+        <input type="text" id="fNewGymAddress" placeholder="Tape pour chercher une adresse…" maxlength="200" autocomplete="off">
+        <div id="fNewGymAddressResults" class="addr-results" style="display:none;"></div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn-primary" id="fNewGymAdd" style="margin-top:0;">Ajouter ce gymnase</button>
+        <button type="button" class="btn-secondary" id="fNewGymCancel" style="margin-top:0;">Annuler</button>
+      </div>
+    </div>
     <label class="field">
       <span class="lbl">Coach(s) assigné(s)</span>
       <div class="coach-picker" id="coachPicker"></div>
@@ -1383,6 +1394,9 @@
     document.getElementById("fRepeatUntilField").style.display = "none";
     document.getElementById("fRepeatUntil").value = "";
 
+    document.getElementById("fNewGymBox").style.display = "none";
+    document.getElementById("fNewGymName").value = "";
+    document.getElementById("fNewGymAddress").value = "";
     renderGymSelect(s ? s.gymId : null);
     populateCourtList();
     populateCoachPicker(s ? s.coaches || [] : (identity ? [identity.name] : []));
@@ -1600,15 +1614,17 @@
     if (!hint) return;
     hint.innerHTML = '<strong>Reste équipe</strong><br>' + benchGroupedHtml(bench);
   }
+  var pendingGymSelect = null;
   function renderGymSelect(selectedId) {
     var sel = document.getElementById("fGymSelect");
     if (!sel) return;
+    if (selectedId !== undefined) pendingGymSelect = selectedId;
     var ids = Object.keys(gyms).sort(function (a, b) { return gyms[a].name.localeCompare(gyms[b].name); });
     document.getElementById("noGymHint").style.display = ids.length === 0 ? "block" : "none";
     sel.innerHTML = ids.map(function (id) {
       return '<option value="' + id + '">' + escapeHtml(gyms[id].name) + '</option>';
-    }).join("");
-    if (selectedId && gyms[selectedId]) sel.value = selectedId;
+    }).join("") + '<option value="__new__">➕ Ajouter un nouveau gymnase…</option>';
+    if (pendingGymSelect && gyms[pendingGymSelect]) sel.value = pendingGymSelect;
   }
   function populateCourtList() {
     var courts = {};
@@ -2563,6 +2579,29 @@
     input.value = "";
   });
   wireAddressAutocomplete("newGymAddress", "newGymAddressResults", function (coords) { selectedGymCoords = coords; });
+  var selectedFNewGymCoords = null;
+  wireAddressAutocomplete("fNewGymAddress", "fNewGymAddressResults", function (coords) { selectedFNewGymCoords = coords; });
+  document.getElementById("fGymSelect").addEventListener("change", function () {
+    document.getElementById("fNewGymBox").style.display = this.value === "__new__" ? "block" : "none";
+  });
+  document.getElementById("fNewGymCancel").addEventListener("click", function () {
+    document.getElementById("fNewGymBox").style.display = "none";
+    document.getElementById("fNewGymName").value = "";
+    document.getElementById("fNewGymAddress").value = "";
+    selectedFNewGymCoords = null;
+    renderGymSelect(pendingGymSelect);
+  });
+  document.getElementById("fNewGymAdd").addEventListener("click", function () {
+    var nameInput = document.getElementById("fNewGymName");
+    var addrInput = document.getElementById("fNewGymAddress");
+    var name = nameInput.value.trim();
+    var address = addrInput.value.trim();
+    if (!name || !address) { toast("Nom et adresse requis"); return; }
+    addGym(name, address, selectedFNewGymCoords ? selectedFNewGymCoords.lat : null, selectedFNewGymCoords ? selectedFNewGymCoords.lng : null);
+    pendingGymSelect = slugify(name);
+    document.getElementById("fNewGymBox").style.display = "none";
+    nameInput.value = ""; addrInput.value = ""; selectedFNewGymCoords = null;
+  });
   document.getElementById("playersTeamFilter").addEventListener("change", function () {
     playersFilterTeamId = this.value;
     renderAdminMembersList();

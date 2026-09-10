@@ -1561,12 +1561,25 @@
     if (current) html += '<div class="lineup-picker-row" data-pick="">✖️ Retirer (' + escapeHtml(current) + ')</div>';
     if (names.length === 0) html += '<div class="empty-mini">Aucun joueur dans cette équipe.</div>';
     html += names.map(function (n) {
-      return '<div class="lineup-picker-row' + (n === current ? " current" : "") + '" data-pick="' + escapeHtml(n) + '">' + escapeHtml(n) + (n === current ? " ✓" : "") + '</div>';
+      var elsewhereKey = Object.keys(setsDraft[currentEditingSet].positions).filter(function (k) {
+        return k !== posKey && setsDraft[currentEditingSet].positions[k] === n;
+      })[0];
+      var elsewhere = elsewhereKey ? LINEUP_POSITIONS.filter(function (p) { return p.key === elsewhereKey; })[0] : null;
+      var suffix = n === current ? " ✓" : (elsewhere ? " — déjà " + escapeHtml(elsewhere.short) : "");
+      return '<div class="lineup-picker-row' + (n === current ? " current" : "") + '" data-pick="' + escapeHtml(n) + '">' + escapeHtml(n) + suffix + '</div>';
     }).join("");
     listEl.innerHTML = html;
     Array.prototype.forEach.call(listEl.querySelectorAll("[data-pick]"), function (row) {
       row.addEventListener("click", function () {
-        setsDraft[currentEditingSet].positions[posKey] = row.getAttribute("data-pick");
+        var picked = row.getAttribute("data-pick");
+        if (picked) {
+          Object.keys(setsDraft[currentEditingSet].positions).forEach(function (k) {
+            if (k !== posKey && setsDraft[currentEditingSet].positions[k] === picked) {
+              setsDraft[currentEditingSet].positions[k] = "";
+            }
+          });
+        }
+        setsDraft[currentEditingSet].positions[posKey] = picked;
         document.getElementById("lineupPickerOverlay").classList.remove("show");
         paintLineupCourt();
         persistSetsIfEditing();

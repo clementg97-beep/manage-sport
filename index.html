@@ -455,6 +455,15 @@
   }
   .set-tab.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
   .set-tab-add { border-style: dashed; }
+  .set-tab-wrap { position: relative; display: inline-flex; align-items: center; }
+  .set-tab-del {
+    margin-left: -9px; background: var(--indispo); color: #fff; border-radius: 50%; width: 17px; height: 17px;
+    display: flex; align-items: center; justify-content: center; font-size: 9px; cursor: pointer; font-weight: 800;
+    border: 1.5px solid var(--bg-card); flex-shrink: 0;
+  }
+  .sets-row { display: flex; gap: 14px; overflow-x: auto; padding: 4px 14px 10px; -webkit-overflow-scrolling: touch; }
+  .set-card { flex: 0 0 190px; }
+  .set-card-heading { font-size: 12.5px; font-weight: 800; color: var(--text-muted); margin-bottom: 4px; }
   .lineup-picker-row {
     display: flex; align-items: center; justify-content: space-between; padding: 12px 4px;
     border-bottom: 1px dashed var(--border); cursor: pointer; font-size: 14px; font-weight: 600;
@@ -1444,7 +1453,8 @@
     if (!wrap) return;
     var nums = Object.keys(setsDraft).sort(function (a, b) { return a - b; });
     var html = nums.map(function (n) {
-      return '<button type="button" class="set-tab' + (n === currentEditingSet ? " active" : "") + '" data-set="' + n + '">Set ' + n + (setsDraft[n].published ? " ✓" : "") + '</button>';
+      var del = nums.length > 1 ? '<span class="set-tab-del" data-del="' + n + '" title="Supprimer ce set">✕</span>' : "";
+      return '<span class="set-tab-wrap"><button type="button" class="set-tab' + (n === currentEditingSet ? " active" : "") + '" data-set="' + n + '">Set ' + n + (setsDraft[n].published ? " ✓" : "") + '</button>' + del + '</span>';
     }).join("");
     if (nums.length < LINEUP_MAX_SETS) {
       html += '<button type="button" class="set-tab set-tab-add" id="addSetBtn">➕ Set</button>';
@@ -1455,6 +1465,12 @@
         currentEditingSet = btn.getAttribute("data-set");
         renderSetTabs();
         paintLineupCourt();
+      });
+    });
+    Array.prototype.forEach.call(wrap.querySelectorAll(".set-tab-del"), function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        deleteSet(btn.getAttribute("data-del"));
       });
     });
     var addBtn = document.getElementById("addSetBtn");
@@ -1490,6 +1506,23 @@
     sessionsCol(teamId).doc(editingSessionId).update({ sets: setsDraft, updatedAt: new Date().toISOString() })
       .catch(function () { toast("Erreur de synchronisation"); });
   }
+  function deleteSet(num) {
+    if (!confirm("Supprimer le Set " + num + " ?")) return;
+    delete setsDraft[num];
+    var remaining = Object.keys(setsDraft).sort(function (a, b) { return a - b; });
+    var renumbered = {};
+    remaining.forEach(function (oldNum, idx) { renumbered[String(idx + 1)] = setsDraft[oldNum]; });
+    setsDraft = renumbered;
+    currentEditingSet = Object.keys(setsDraft)[0];
+    if (!currentEditingSet) {
+      setsDraft["1"] = { positions: emptyPositions(), published: false };
+      currentEditingSet = "1";
+    }
+    renderSetTabs();
+    paintLineupCourt();
+    persistSetsIfEditing();
+    toast("Set supprimé");
+  }
   document.getElementById("validateSetBtn").addEventListener("click", function () {
     setsDraft[currentEditingSet].published = !setsDraft[currentEditingSet].published;
     renderSetTabs();
@@ -1502,6 +1535,20 @@
     return '<div class="court-pos' + (name ? " filled" : "") + '" data-pos-key="' + p.key + '">' +
       '<div class="court-pos-circle">' + (name ? escapeHtml(name.split(" ")[0]) : "+") + '</div>' +
       '<div class="court-pos-label">' + escapeHtml(p.short) + '</div></div>';
+  }
+  function staticCourtHtml(positions) {
+    var onCourt = LINEUP_POSITIONS.filter(function (p) { return p.onCourt; });
+    var libero = LINEUP_POSITIONS.filter(function (p) { return !p.onCourt; })[0];
+    function posHtml(p) {
+      var name = positions[p.key];
+      return '<div class="court-pos' + (name ? " filled" : "") + '">' +
+        '<div class="court-pos-circle">' + (name ? escapeHtml(name.split(" ")[0]) : "+") + '</div>' +
+        '<div class="court-pos-label">' + escapeHtml(p.short) + '</div></div>';
+    }
+    var html = '<div class="volley-court"><div class="court-net"></div><div class="court-grid">' +
+      onCourt.map(posHtml).join("") + '</div></div>';
+    html += '<div class="libero-row">' + posHtml(libero) + '</div>';
+    return html;
   }
   function openLineupPositionPicker(posKey) {
     var pos = LINEUP_POSITIONS.filter(function (p) { return p.key === posKey; })[0];
@@ -2068,23 +2115,23 @@
     if (s.type === "match" && s.sets) {
       var canSeeDraft = canCreateSessions();
       var setNums = Object.keys(s.sets).sort(function (a, b) { return a - b; })
-        .filter(function (n) { return canSeeDraft || s.sets[n].published; });
-      setNums.forEach(function (n) {
-        var set = s.sets[n];
-        var positions = set.positions || {};
-        var filledPositions = LINEUP_POSITIONS.filter(function (p) { return positions[p.key]; });
-        if (!filledPositions.length) return;
-        html += '<div style="padding:10px 14px 0; border-top:1px solid var(--border); font-size:12.5px; font-weight:800; color:var(--text-muted);">Set ' + n +
-          (set.published ? "" : ' <span style="color:var(--peutetre);">(brouillon, non visible des joueurs)</span>') + '</div>';
-        html += '<ul style="margin:0; padding:6px 14px 4px 30px; font-size:13.5px; line-height:1.9;">';
-        filledPositions.forEach(function (p) {
-          html += '<li><strong>' + escapeHtml(p.label) + '</strong> : ' + escapeHtml(positions[p.key]) + '</li>';
+        .filter(function (n) { return canSeeDraft || s.sets[n].published; })
+        .filter(function (n) { var pos = s.sets[n].positions || {}; return LINEUP_POSITIONS.some(function (p) { return pos[p.key]; }); });
+      if (setNums.length) {
+        html += '<div style="border-top:1px solid var(--border);"><div class="sets-row">';
+        setNums.forEach(function (n) {
+          var set = s.sets[n];
+          var positions = set.positions || {};
+          var assignedNames = LINEUP_POSITIONS.map(function (p) { return positions[p.key]; }).filter(Boolean);
+          var bench = teamPlayerNames().filter(function (n2) { return assignedNames.indexOf(n2) === -1; });
+          html += '<div class="set-card">';
+          html += '<div class="set-card-heading">Set ' + n + (set.published ? "" : ' <span style="color:var(--peutetre);">(brouillon)</span>') + '</div>';
+          html += staticCourtHtml(positions);
+          html += '<div style="font-size:11px; line-height:1.5;"><strong>Reste équipe</strong>' + benchGroupedHtml(bench) + '</div>';
+          html += '</div>';
         });
-        html += '</ul>';
-        var assignedNames = filledPositions.map(function (p) { return positions[p.key]; });
-        var bench = teamPlayerNames().filter(function (n2) { return assignedNames.indexOf(n2) === -1; });
-        if (bench.length) html += '<div class="card-coaches" style="padding:0 14px 10px;"><strong>Reste équipe</strong>' + benchGroupedHtml(bench) + '</div>';
-      });
+        html += '</div></div>';
+      }
     }
 
     if (gym && gym.lat && gym.lng) {

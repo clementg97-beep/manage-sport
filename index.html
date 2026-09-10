@@ -421,33 +421,40 @@
   .week-event-empty { font-size: 10px; color: var(--text-muted); text-align: center; padding-top: 10px; }
 
   .volley-court {
-    position: relative; width: 100%; max-width: 340px; margin: 4px auto 10px; aspect-ratio: 3 / 4;
-    background: linear-gradient(180deg, #2E8B6F 0%, #26795F 100%); border-radius: 10px;
-    border: 3px solid rgba(255,255,255,0.85); overflow: hidden; padding: 10px;
+    position: relative; width: 100%; max-width: 190px; margin: 4px auto 8px; aspect-ratio: 3 / 4;
+    background: linear-gradient(180deg, #2E8B6F 0%, #26795F 100%); border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.85); overflow: hidden; padding: 6px;
   }
   .court-net {
-    position: absolute; top: 0; left: 0; right: 0; height: 6px;
-    background: repeating-linear-gradient(90deg, rgba(255,255,255,0.9) 0 8px, transparent 8px 16px);
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: repeating-linear-gradient(90deg, rgba(255,255,255,0.9) 0 6px, transparent 6px 12px);
   }
   .court-grid {
     display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr);
-    height: 100%; gap: 6px;
+    height: 100%; gap: 3px;
   }
-  .court-pos { display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; gap: 4px; }
+  .court-pos { display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; gap: 2px; }
   .court-pos-circle {
-    width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,0.18);
-    border: 2px dashed rgba(255,255,255,0.7); color: #fff; display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 800; text-align: center; line-height: 1.1; padding: 2px;
+    width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.18);
+    border: 1.5px dashed rgba(255,255,255,0.7); color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 800; text-align: center; line-height: 1.05; padding: 1px;
   }
-  .court-pos.filled .court-pos-circle { background: #FFC94A; border: 2px solid #FFC94A; color: #171A21; }
-  .court-pos-label { font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
-  .libero-row { display: flex; justify-content: flex-start; align-items: center; gap: 10px; margin: 4px 0 14px; padding-left: 4px; }
-  .libero-row .court-pos { flex-direction: row; gap: 8px; }
+  .court-pos.filled .court-pos-circle { background: #FFC94A; border: 1.5px solid #FFC94A; color: #171A21; }
+  .court-pos-label { font-size: 7.5px; font-weight: 800; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+  .libero-row { display: flex; justify-content: flex-start; align-items: center; gap: 8px; margin: 4px 0 12px; padding-left: 4px; }
+  .libero-row .court-pos { flex-direction: row; gap: 6px; }
   .libero-row .court-pos-circle {
-    width: 48px; height: 48px; background: #171A21; border: 2px solid #171A21; color: #fff;
+    width: 32px; height: 32px; background: #171A21; border: 1.5px solid #171A21; color: #fff; font-size: 8px;
   }
   .libero-row .court-pos.filled .court-pos-circle { background: #171A21; border-color: #171A21; color: #FFC94A; }
-  .libero-row .court-pos-label { color: var(--text); text-shadow: none; font-size: 12px; }
+  .libero-row .court-pos-label { color: var(--text); text-shadow: none; font-size: 11px; }
+  .set-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .set-tab {
+    border: 1.5px solid var(--border); background: var(--bg-card); color: var(--text-muted);
+    padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; cursor: pointer;
+  }
+  .set-tab.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .set-tab-add { border-style: dashed; }
   .lineup-picker-row {
     display: flex; align-items: center; justify-content: space-between; padding: 12px 4px;
     border-bottom: 1px dashed var(--border); cursor: pointer; font-size: 14px; font-weight: 600;
@@ -713,10 +720,12 @@
       <div class="coach-picker" id="coachPicker"></div>
     </label>
     <div id="lineupSection" style="display:none;">
-      <h3>Alignement</h3>
-      <div class="hint" style="margin-top:-6px;">Optionnel. Peut être rempli plus tard, une fois les disponibilités connues. Tape un poste pour assigner un joueur.</div>
+      <h3>Alignements</h3>
+      <div class="hint" style="margin-top:-6px;">Optionnel. Peut être rempli plus tard. Tape un poste pour assigner un joueur. Les joueurs ne voient un set qu'une fois validé.</div>
+      <div class="set-tabs" id="setTabs"></div>
       <div id="lineupCourtWrap"></div>
       <div class="hint" id="lineupBenchHint" style="margin-top:4px;">—</div>
+      <button type="button" class="btn-secondary" id="validateSetBtn" style="margin-top:10px;">✅ Valider l'alignement de ce set</button>
     </div>
     <label class="field">
       <span class="lbl">Notes (optionnel)</span>
@@ -1368,7 +1377,7 @@
     renderGymSelect(s ? s.gymId : null);
     populateCourtList();
     populateCoachPicker(s ? s.coaches || [] : (identity ? [identity.name] : []));
-    populateLineupSelects(s ? s.lineup : null);
+    populateLineupSelects(s ? s.sets : null);
     document.getElementById("sessionOverlay").classList.add("show");
   }
   document.getElementById("fRepeat").addEventListener("change", function () {
@@ -1406,13 +1415,56 @@
     html += '</ul>';
     return html;
   }
-  var currentLineupDraft = {};
-  function populateLineupSelects(existingLineup) {
-    currentLineupDraft = {};
-    LINEUP_POSITIONS.forEach(function (p) {
-      currentLineupDraft[p.key] = (existingLineup && existingLineup[p.key]) || "";
-    });
+  var LINEUP_MAX_SETS = 5;
+  var setsDraft = {};        // "1" -> { positions: {key:name}, published: bool }
+  var currentEditingSet = "1";
+  function emptyPositions() {
+    var p = {};
+    LINEUP_POSITIONS.forEach(function (x) { p[x.key] = ""; });
+    return p;
+  }
+  function populateLineupSelects(existingSets) {
+    setsDraft = {};
+    if (existingSets && Object.keys(existingSets).length) {
+      Object.keys(existingSets).forEach(function (n) {
+        var s = existingSets[n];
+        var positions = emptyPositions();
+        LINEUP_POSITIONS.forEach(function (p) { if (s.positions && s.positions[p.key]) positions[p.key] = s.positions[p.key]; });
+        setsDraft[n] = { positions: positions, published: !!s.published };
+      });
+    } else {
+      setsDraft["1"] = { positions: emptyPositions(), published: false };
+    }
+    currentEditingSet = Object.keys(setsDraft).sort(function (a, b) { return a - b; })[0];
+    renderSetTabs();
     paintLineupCourt();
+  }
+  function renderSetTabs() {
+    var wrap = document.getElementById("setTabs");
+    if (!wrap) return;
+    var nums = Object.keys(setsDraft).sort(function (a, b) { return a - b; });
+    var html = nums.map(function (n) {
+      return '<button type="button" class="set-tab' + (n === currentEditingSet ? " active" : "") + '" data-set="' + n + '">Set ' + n + (setsDraft[n].published ? " ✓" : "") + '</button>';
+    }).join("");
+    if (nums.length < LINEUP_MAX_SETS) {
+      html += '<button type="button" class="set-tab set-tab-add" id="addSetBtn">➕ Set</button>';
+    }
+    wrap.innerHTML = html;
+    Array.prototype.forEach.call(wrap.querySelectorAll(".set-tab[data-set]"), function (btn) {
+      btn.addEventListener("click", function () {
+        currentEditingSet = btn.getAttribute("data-set");
+        renderSetTabs();
+        paintLineupCourt();
+      });
+    });
+    var addBtn = document.getElementById("addSetBtn");
+    if (addBtn) addBtn.addEventListener("click", function () {
+      var nextNum = String(nums.length + 1);
+      setsDraft[nextNum] = { positions: emptyPositions(), published: false };
+      currentEditingSet = nextNum;
+      renderSetTabs();
+      paintLineupCourt();
+    });
   }
   function paintLineupCourt() {
     var wrap = document.getElementById("lineupCourtWrap");
@@ -1425,10 +1477,20 @@
     Array.prototype.forEach.call(wrap.querySelectorAll("[data-pos-key]"), function (el) {
       el.addEventListener("click", function () { openLineupPositionPicker(el.getAttribute("data-pos-key")); });
     });
+    var validateBtn = document.getElementById("validateSetBtn");
+    var published = setsDraft[currentEditingSet].published;
+    validateBtn.textContent = published ? "✔️ Set " + currentEditingSet + " validé — tape pour annuler" : "✅ Valider l'alignement de ce set";
+    validateBtn.classList.toggle("btn-primary", published);
+    validateBtn.classList.toggle("btn-secondary", !published);
     updateLineupBenchHint();
   }
+  document.getElementById("validateSetBtn").addEventListener("click", function () {
+    setsDraft[currentEditingSet].published = !setsDraft[currentEditingSet].published;
+    renderSetTabs();
+    paintLineupCourt();
+  });
   function lineupPosHtml(p) {
-    var name = currentLineupDraft[p.key];
+    var name = setsDraft[currentEditingSet].positions[p.key];
     return '<div class="court-pos' + (name ? " filled" : "") + '" data-pos-key="' + p.key + '">' +
       '<div class="court-pos-circle">' + (name ? escapeHtml(name.split(" ")[0]) : "+") + '</div>' +
       '<div class="court-pos-label">' + escapeHtml(p.short) + '</div></div>';
@@ -1436,9 +1498,9 @@
   function openLineupPositionPicker(posKey) {
     var pos = LINEUP_POSITIONS.filter(function (p) { return p.key === posKey; })[0];
     if (!pos) return;
-    document.getElementById("lineupPickerTitle").textContent = pos.label;
+    document.getElementById("lineupPickerTitle").textContent = pos.label + " — Set " + currentEditingSet;
     var names = teamPlayerNames();
-    var current = currentLineupDraft[posKey];
+    var current = setsDraft[currentEditingSet].positions[posKey];
     var listEl = document.getElementById("lineupPickerList");
     var html = "";
     if (current) html += '<div class="lineup-picker-row" data-pick="">✖️ Retirer (' + escapeHtml(current) + ')</div>';
@@ -1449,7 +1511,7 @@
     listEl.innerHTML = html;
     Array.prototype.forEach.call(listEl.querySelectorAll("[data-pick]"), function (row) {
       row.addEventListener("click", function () {
-        currentLineupDraft[posKey] = row.getAttribute("data-pick");
+        setsDraft[currentEditingSet].positions[posKey] = row.getAttribute("data-pick");
         document.getElementById("lineupPickerOverlay").classList.remove("show");
         paintLineupCourt();
       });
@@ -1460,10 +1522,10 @@
     document.getElementById("lineupPickerOverlay").classList.remove("show");
   });
   function readLineupFromForm() {
-    return currentLineupDraft;
+    return setsDraft;
   }
   function updateLineupBenchHint() {
-    var assigned = LINEUP_POSITIONS.map(function (p) { return currentLineupDraft[p.key]; }).filter(Boolean);
+    var assigned = LINEUP_POSITIONS.map(function (p) { return setsDraft[currentEditingSet].positions[p.key]; }).filter(Boolean);
     var bench = teamPlayerNames().filter(function (n) { return assigned.indexOf(n) === -1; });
     var hint = document.getElementById("lineupBenchHint");
     if (!hint) return;
@@ -1538,7 +1600,7 @@
       coaches: coachSelection,
       notes: document.getElementById("fNotes").value.trim(),
       link: document.getElementById("fLink").value.trim(),
-      lineup: selectedType === "match" ? readLineupFromForm() : null,
+      sets: selectedType === "match" ? readLineupFromForm() : null,
       createdBy: identity ? identity.name : "inconnu",
       updatedAt: new Date().toISOString()
     };
@@ -1994,18 +2056,26 @@
     if (s.notes) html += '<div class="card-coaches">📎 ' + escapeHtml(s.notes) + '</div>';
     html += '</div></div>';
 
-    if (s.type === "match" && s.lineup) {
-      var filledPositions = LINEUP_POSITIONS.filter(function (p) { return s.lineup[p.key]; });
-      if (filledPositions.length) {
-        html += '<ul style="margin:0; padding:10px 14px 4px 30px; border-top:1px solid var(--border); font-size:13.5px; line-height:1.9;">';
+    if (s.type === "match" && s.sets) {
+      var canSeeDraft = canCreateSessions();
+      var setNums = Object.keys(s.sets).sort(function (a, b) { return a - b; })
+        .filter(function (n) { return canSeeDraft || s.sets[n].published; });
+      setNums.forEach(function (n) {
+        var set = s.sets[n];
+        var positions = set.positions || {};
+        var filledPositions = LINEUP_POSITIONS.filter(function (p) { return positions[p.key]; });
+        if (!filledPositions.length) return;
+        html += '<div style="padding:10px 14px 0; border-top:1px solid var(--border); font-size:12.5px; font-weight:800; color:var(--text-muted);">Set ' + n +
+          (set.published ? "" : ' <span style="color:var(--peutetre);">(brouillon, non visible des joueurs)</span>') + '</div>';
+        html += '<ul style="margin:0; padding:6px 14px 4px 30px; font-size:13.5px; line-height:1.9;">';
         filledPositions.forEach(function (p) {
-          html += '<li><strong>' + escapeHtml(p.label) + '</strong> : ' + escapeHtml(s.lineup[p.key]) + '</li>';
+          html += '<li><strong>' + escapeHtml(p.label) + '</strong> : ' + escapeHtml(positions[p.key]) + '</li>';
         });
         html += '</ul>';
-        var assignedNames = filledPositions.map(function (p) { return s.lineup[p.key]; });
-        var bench = teamPlayerNames().filter(function (n) { return assignedNames.indexOf(n) === -1; });
+        var assignedNames = filledPositions.map(function (p) { return positions[p.key]; });
+        var bench = teamPlayerNames().filter(function (n2) { return assignedNames.indexOf(n2) === -1; });
         if (bench.length) html += '<div class="card-coaches" style="padding:0 14px 10px;"><strong>Reste équipe</strong>' + benchGroupedHtml(bench) + '</div>';
-      }
+      });
     }
 
     if (gym && gym.lat && gym.lng) {

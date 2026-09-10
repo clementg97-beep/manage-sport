@@ -521,7 +521,6 @@
   <div class="view-toggle">
     <button class="view-mode-btn active" id="viewModeList">📋 Liste</button>
     <button class="view-mode-btn" id="viewModeCalendar">🗓️ Calendrier</button>
-    <button class="view-mode-btn" id="viewModeGlobal" style="display:none;">🌐 Global</button>
   </div>
 
   <div class="tabs" id="listTabs">
@@ -943,6 +942,7 @@
   var calendarMonth = new Date(); calendarMonth.setDate(1);
   var selectedCalDay = null;
   var globalSessions = {}; // id -> session data + teamId + teamName (admin-only cross-team view)
+  var isGlobalTeam = false; // admin selected "🌐 Toutes les équipes" from the team picker
   var globalSessionsUnsub = null;
   var openRosterIds = {};
   var db = null;
@@ -1037,11 +1037,9 @@
     var roleLabel = (role === "coach" ? "Coach" : (isPendingCoach() ? "Joueur (coach en attente)" : "Joueur")) + (isAdmin ? " · Admin" : "");
     document.getElementById("chipRole").textContent = roleLabel;
     document.getElementById("avatarInit").textContent = initials(identity.name);
-    document.getElementById("fabAdd").style.display = (canCreateSessions() && teamId) ? "flex" : "none";
+    document.getElementById("fabAdd").style.display = (canCreateSessions() && teamId && !isGlobalTeam) ? "flex" : "none";
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
-    var globalBtnEl = document.getElementById("viewModeGlobal");
-    if (globalBtnEl) globalBtnEl.style.display = isAdmin ? "block" : "none";
-    document.getElementById("icsExportBtn").style.display = teamId ? "block" : "none";
+    document.getElementById("icsExportBtn").style.display = (teamId && !isGlobalTeam) ? "block" : "none";
   }
 
   // ---------- db path helpers ----------
@@ -1127,7 +1125,7 @@
       renderAdminCoachList();
       recomputeCoachWhitelistForCurrentTeam();
       renderAll();
-      if (identity && isAdmin && !teamId) openTeamOverlay();
+      if (identity && isAdmin && !teamId && !isGlobalTeam) openTeamOverlay();
     }, function () {
       document.getElementById("offlineNote").style.display = "block";
     });
@@ -1235,9 +1233,22 @@
   }
 
   function selectTeam(id) {
+    isGlobalTeam = false;
+    unsubscribeGlobalSessions();
     saveTeamId(id);
     if (dbReady) subscribeTeam(id);
     upsertPerson();
+    renderTeamChip();
+    renderTeamList();
+    closeTeamOverlay();
+    renderAll();
+  }
+  function selectGlobalTeam() {
+    if (!isAdmin) return;
+    isGlobalTeam = true;
+    unsubscribeTeam();
+    sessions = {}; availability = {}; people = {}; coachWhitelist = {};
+    subscribeGlobalSessions();
     renderTeamChip();
     renderTeamList();
     closeTeamOverlay();
@@ -1869,7 +1880,7 @@
     var chip = document.getElementById("teamChip");
     if (!identity) { chip.style.display = "none"; return; }
     chip.style.display = "inline-flex";
-    document.getElementById("teamChipName").textContent = (teamId && teams[teamId]) ? teams[teamId].name : "Choisir…";
+    document.getElementById("teamChipName").textContent = isGlobalTeam ? "Toutes les équipes" : ((teamId && teams[teamId]) ? teams[teamId].name : "Choisir…");
     var locked = !isAdmin && myAssignment && myAssignment.teamId;
     document.getElementById("teamChipArrow").style.display = locked ? "none" : "inline";
     chip.title = locked ? "Équipe assignée par l'administrateur" : "";
@@ -1877,8 +1888,9 @@
   }
   function renderTeamBanner() {
     var el = document.getElementById("teamBanner");
+    if (!identity || isGlobalTeam) { el.style.display = "none"; return; }
     var team = teamId ? teams[teamId] : null;
-    if (!identity || !team) { el.style.display = "none"; return; }
+    if (!team) { el.style.display = "none"; return; }
     el.style.display = "block";
     el.style.backgroundImage = 'url("' + (team.photoUrl || DEFAULT_TEAM_PHOTO) + '")';
     el.innerHTML = '<div class="team-banner-label">👥 ' + escapeHtml(team.name) + '</div>' +
@@ -1897,16 +1909,23 @@
   function renderTeamList() {
     var el = document.getElementById("teamList");
     var ids = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
-    if (ids.length === 0) {
-      el.innerHTML = '<div class="empty-mini">' + (isAdmin ? "Aucune équipe pour l'instant. Crée la première ci-dessous." : "Aucune équipe pour l'instant. Demande à l'administrateur d'en créer une.") + '</div>';
-    } else {
-      el.innerHTML = ids.map(function (id) {
-        return '<button type="button" class="team-row' + (id === teamId ? ' active' : '') + '" data-team="' + id + '">' + escapeHtml(teams[id].name) + (id === teamId ? ' ✓' : '') + '</button>';
-      }).join("");
-      Array.prototype.forEach.call(el.querySelectorAll(".team-row"), function (btn) {
-        btn.addEventListener("click", function () { chooseTeam(btn.getAttribute("data-team")); });
-      });
+    var html = "";
+    if (isAdmin) {
+      html += '<button type="button" class="team-row' + (isGlobalTeam ? ' active' : '') + '" data-global="1">🌐 Toutes les équipes' + (isGlobalTeam ? ' ✓' : '') + '</button>';
     }
+    if (ids.length === 0) {
+      html += '<div class="empty-mini">' + (isAdmin ? "Aucune équipe pour l'instant. Crée la première ci-dessous." : "Aucune équipe pour l'instant. Demande à l'administrateur d'en créer une.") + '</div>';
+    } else {
+      html += ids.map(function (id) {
+        return '<button type="button" class="team-row' + (!isGlobalTeam && id === teamId ? ' active' : '') + '" data-team="' + id + '">' + escapeHtml(teams[id].name) + (!isGlobalTeam && id === teamId ? ' ✓' : '') + '</button>';
+      }).join("");
+    }
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll(".team-row[data-team]"), function (btn) {
+      btn.addEventListener("click", function () { chooseTeam(btn.getAttribute("data-team")); });
+    });
+    var globalRowBtn = el.querySelector(".team-row[data-global]");
+    if (globalRowBtn) globalRowBtn.addEventListener("click", selectGlobalTeam);
     document.getElementById("teamCreateBox").style.display = isAdmin ? "block" : "none";
   }
   function openTeamOverlay() {
@@ -2256,7 +2275,7 @@
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
   function sessionsByDate() {
-    var src = viewMode === "global" ? globalSessions : sessions;
+    var src = isGlobalTeam ? globalSessions : sessions;
     var byDate = {};
     Object.keys(src).forEach(function (id) {
       var s = src[id];
@@ -2268,7 +2287,7 @@
   function agendaHtml(daySessions) {
     var sorted = daySessions.slice().sort(function (a, b) { return a.time < b.time ? -1 : 1; });
     if (sorted.length === 0) return '<div class="empty-mini">Aucune séance ce jour-là.</div>';
-    if (viewMode === "global") return sorted.map(function (s) { return globalRowHtml(s); }).join("");
+    if (isGlobalTeam) return sorted.map(function (s) { return globalRowHtml(s); }).join("");
     return sorted.map(function (s) { return sessionCardHtml(s); }).join("");
   }
   function globalRowHtml(s) {
@@ -2342,7 +2361,7 @@
         renderCalendarView();
       });
     });
-    if (viewMode === "global") wireGlobalRows(el); else wireSessionCardEvents(el);
+    if (isGlobalTeam) wireGlobalRows(el); else wireSessionCardEvents(el);
   }
   function renderWeekCalView(el) {
     var ref = new Date(selectedCalDay + "T00:00:00");
@@ -2395,7 +2414,7 @@
         renderCalendarView();
       });
     });
-    if (viewMode === "global") wireGlobalRows(el); else wireSessionCardEvents(el);
+    if (isGlobalTeam) wireGlobalRows(el); else wireSessionCardEvents(el);
   }
   function renderDayCalView(el) {
     var d = new Date(selectedCalDay + "T00:00:00");
@@ -2417,19 +2436,13 @@
         renderCalendarView();
       });
     });
-    if (viewMode === "global") wireGlobalRows(el); else wireSessionCardEvents(el);
+    if (isGlobalTeam) wireGlobalRows(el); else wireSessionCardEvents(el);
   }
   function renderSessionList() {
     var list = document.getElementById("sessionList");
     var calView = document.getElementById("calendarView");
     if (!identity) { list.innerHTML = ""; calView.style.display = "none"; return; }
-    if (viewMode === "global") {
-      list.style.display = "none";
-      calView.style.display = "block";
-      renderCalendarView();
-      return;
-    }
-    if (!teamId) {
+    if (!teamId && !isGlobalTeam) {
       calView.style.display = "none";
       list.style.display = "block";
       list.innerHTML = '<div class="empty"><div class="e-icon">👥</div><div class="e-title">Choisis une équipe</div><div class="e-sub">Utilise le sélecteur en haut pour rejoindre une équipe.</div></div>';
@@ -2443,10 +2456,11 @@
     }
     calView.style.display = "none";
     list.style.display = "block";
+    var src = isGlobalTeam ? globalSessions : sessions;
     var now = todayStr() + "T00:00";
-    var ids = Object.keys(sessions).sort(function (a, b) { return sessions[a].datetime < sessions[b].datetime ? -1 : 1; });
+    var ids = Object.keys(src).sort(function (a, b) { return src[a].datetime < src[b].datetime ? -1 : 1; });
     var filtered = ids.filter(function (id) {
-      var s = sessions[id];
+      var s = src[id];
       return currentTab === "upcoming" ? s.datetime >= now : s.datetime < now;
     });
     if (currentTab === "past") filtered.reverse();
@@ -2454,7 +2468,7 @@
     if (filtered.length === 0) {
       if (currentTab === "upcoming") {
         list.innerHTML = '<div class="empty"><div class="e-icon">🏐</div><div class="e-title">Aucune séance à venir</div>' +
-          '<div class="e-sub">' + (canCreateSessions() ? "Appuie sur + pour planifier la prochaine séance." : "Ton coach n'a pas encore ajouté de séance.") + '</div></div>';
+          '<div class="e-sub">' + (canCreateSessions() && !isGlobalTeam ? "Appuie sur + pour planifier la prochaine séance." : "Aucune séance planifiée.") + '</div></div>';
       } else {
         list.innerHTML = '<div class="empty"><div class="e-icon">📭</div><div class="e-title">Aucune séance passée</div></div>';
       }
@@ -2463,15 +2477,15 @@
 
     var currentDate = null, html = "";
     filtered.forEach(function (id) {
-      var s = sessions[id];
+      var s = src[id];
       if (s.date !== currentDate) {
         currentDate = s.date;
         html += '<div class="date-heading">' + fmtDateHeading(s.date) + '</div>';
       }
-      html += sessionCardHtml(s);
+      html += isGlobalTeam ? globalRowHtml(s) : sessionCardHtml(s);
     });
     list.innerHTML = html;
-    wireSessionCardEvents(list);
+    if (isGlobalTeam) wireGlobalRows(list); else wireSessionCardEvents(list);
   }
   function wireSessionCardEvents(container) {
     Array.prototype.forEach.call(container.querySelectorAll('[data-role="toggle-roster"]'), function (el) {
@@ -2722,7 +2736,7 @@
     try { localStorage.removeItem("creneau_admin"); } catch (e) {}
     toast("Mode administrateur désactivé sur cet appareil");
     document.getElementById("onboardOverlay").classList.remove("show");
-    if (viewMode === "global") setViewMode("list");
+    if (isGlobalTeam) setViewMode("list");
     if (dbReady) subscribeMyAssignment();
     renderAll();
   });
@@ -2787,7 +2801,7 @@
         next[d.id] = Object.assign({ id: d.id, teamId: tid, teamName: teams[tid] ? teams[tid].name : "?" }, d.data());
       });
       globalSessions = next;
-      if (viewMode === "global") renderAll();
+      if (isGlobalTeam) renderAll();
     }, function (err) {
       console.error("[global] erreur collectionGroup", err);
       toast("Erreur de chargement du calendrier global");
@@ -2800,17 +2814,12 @@
     viewMode = mode;
     document.getElementById("viewModeList").classList.toggle("active", mode === "list");
     document.getElementById("viewModeCalendar").classList.toggle("active", mode === "calendar");
-    var globalBtn = document.getElementById("viewModeGlobal");
-    if (globalBtn) globalBtn.classList.toggle("active", mode === "global");
     document.getElementById("listTabs").style.display = mode === "list" ? "flex" : "none";
-    document.getElementById("calTabs").style.display = (mode === "calendar" || mode === "global") ? "flex" : "none";
-    if (mode === "global") { subscribeGlobalSessions(); } else { unsubscribeGlobalSessions(); }
+    document.getElementById("calTabs").style.display = mode === "calendar" ? "flex" : "none";
     renderAll();
   }
   document.getElementById("viewModeList").addEventListener("click", function () { setViewMode("list"); });
   document.getElementById("viewModeCalendar").addEventListener("click", function () { setViewMode("calendar"); });
-  var viewModeGlobalBtn = document.getElementById("viewModeGlobal");
-  if (viewModeGlobalBtn) viewModeGlobalBtn.addEventListener("click", function () { setViewMode("global"); });
   Array.prototype.forEach.call(document.querySelectorAll(".overlay"), function (ov) {
     ov.addEventListener("click", function (e) {
       if (e.target !== ov) return;

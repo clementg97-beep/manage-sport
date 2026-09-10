@@ -547,7 +547,7 @@
     <button class="tab" data-cal-view="day">📋 Jour</button>
   </div>
 
-  <div class="tabs" id="typeTabs" style="margin-top:-8px;">
+  <div class="tabs" id="typeTabs" style="display:none; margin-top:-8px;">
     <button class="tab active" data-type-filter="all">Tous</button>
     <button class="tab" data-type-filter="pratique">Pratiques</button>
     <button class="tab" data-type-filter="match">Matchs</button>
@@ -961,7 +961,7 @@
   var people = {};          // slug -> {name, role} (current team)
   var coachWhitelist = {};  // slug -> {name} (current team)
   var currentTab = "upcoming";
-  var typeFilter = "all"; // "all" | "pratique" | "match"
+  var typeFilter = "all"; // "all" | "pratique" | "match" — filtre visible uniquement dans la vue admin "Toutes les équipes"
   var upcomingExpanded = false; // À venir montre 2 semaines par défaut
   var viewMode = "list";   // "list" | "calendar" | "global" (global = admin-only, all teams)
   var calSubView = "month"; // "month" | "week" | "day"
@@ -1079,7 +1079,7 @@
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
     document.getElementById("icsExportBtn").style.display = (teamId && !isGlobalTeam) ? "block" : "none";
     document.getElementById("viewModeTeam").style.display = (teamId && !isGlobalTeam) ? "" : "none";
-    document.getElementById("typeTabs").style.display = (viewMode === "list" && canManageTeam()) ? "flex" : "none";
+    document.getElementById("typeTabs").style.display = (viewMode === "list" && isGlobalTeam) ? "flex" : "none";
     if ((!teamId || isGlobalTeam) && viewMode === "team") setViewMode("list");
   }
 
@@ -2604,7 +2604,7 @@
     var ids = Object.keys(src).sort(function (a, b) { return src[a].datetime < src[b].datetime ? -1 : 1; });
     var filtered = ids.filter(function (id) {
       var s = src[id];
-      if (typeFilter !== "all" && s.type !== typeFilter) return false;
+      if (isGlobalTeam && typeFilter !== "all" && s.type !== typeFilter) return false;
       return currentTab === "upcoming" ? s.datetime >= now : s.datetime < now;
     });
     if (currentTab === "past") filtered.reverse();
@@ -3009,13 +3009,7 @@
     document.getElementById("viewModeTeam").classList.toggle("active", mode === "team");
     document.getElementById("listTabs").style.display = mode === "list" ? "flex" : "none";
     document.getElementById("calTabs").style.display = mode === "calendar" ? "flex" : "none";
-    document.getElementById("typeTabs").style.display = (mode === "list" && canManageTeam()) ? "flex" : "none";
-    if (!canManageTeam() && typeFilter !== "all") {
-      typeFilter = "all";
-      Array.prototype.forEach.call(document.querySelectorAll("#typeTabs .tab"), function (x) {
-        x.classList.toggle("active", x.getAttribute("data-type-filter") === "all");
-      });
-    }
+    document.getElementById("typeTabs").style.display = (mode === "list" && isGlobalTeam) ? "flex" : "none";
     renderAll();
   }
   document.getElementById("viewModeList").addEventListener("click", function () { setViewMode("list"); });

@@ -433,9 +433,9 @@
   .week-event-empty { font-size: 10px; color: var(--text-muted); text-align: center; padding-top: 10px; }
 
   .volley-court {
-    position: relative; width: 100%; max-width: 190px; margin: 4px auto 8px; aspect-ratio: 3 / 4;
+    position: relative; width: 100%; max-width: 190px; margin: 4px auto 6px; aspect-ratio: 3 / 2.9;
     background: linear-gradient(180deg, #2A4A7D 0%, #1D3557 100%); border-radius: 8px;
-    border: 2px solid rgba(255,255,255,0.85); overflow: hidden; padding: 6px;
+    border: 2px solid rgba(255,255,255,0.85); overflow: hidden; padding: 5px;
   }
   .court-net {
     position: absolute; top: 0; left: 0; right: 0; height: 4px;
@@ -443,16 +443,16 @@
   }
   .court-grid {
     display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr);
-    height: 100%; gap: 3px;
+    height: 100%; gap: 2px;
   }
-  .court-pos { display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; gap: 2px; }
+  .court-pos { display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; gap: 1px; }
   .court-pos-circle {
-    width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,0.18);
+    width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.18);
     border: 1.5px dashed rgba(255,255,255,0.7); color: #fff; display: flex; align-items: center; justify-content: center;
-    font-size: 10.5px; font-weight: 800; text-align: center; line-height: 1.05; padding: 1px;
+    font-size: 10px; font-weight: 800; text-align: center; line-height: 1.05; padding: 1px;
   }
   .court-pos.filled .court-pos-circle { background: #FFC94A; border: 1.5px solid #FFC94A; color: #171A21; }
-  .court-pos-label { font-size: 9.5px; font-weight: 800; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+  .court-pos-label { font-size: 9px; font-weight: 800; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
   .libero-row { display: flex; justify-content: flex-start; align-items: center; gap: 8px; margin: 4px 0 12px; padding-left: 4px; }
   .libero-row .court-pos { flex-direction: row; gap: 6px; }
   .libero-row .court-pos-circle {

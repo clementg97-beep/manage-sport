@@ -550,8 +550,9 @@
     </div>
 
     <div class="admin-panel" data-admin-panel="players" style="display:none;">
-      <h3>Joueurs (toutes équipes)</h3>
-      <div class="hint" style="margin-top:-4px;">Un joueur est verrouillé sur son équipe une fois assigné — change son équipe ici si besoin.</div>
+      <h3>Joueurs</h3>
+      <div class="hint" style="margin-top:-4px;">Un joueur est verrouillé sur son équipe une fois assigné — change son équipe ici si besoin, il disparaîtra de cette liste et rejoindra celle de sa nouvelle équipe.</div>
+      <select id="playersTeamFilter" style="margin-bottom:12px;"></select>
       <div id="membersList"></div>
     </div>
 
@@ -823,6 +824,7 @@
   var allAssignments = {};       // slug -> {name, teamId} — for the admin "Membres" panel
   var adminNames = {};           // slug -> {name} — additional admins beyond ADMIN_NAME
   var allCoachGrants = {};       // docId (teamId_slug) -> {name, teamId} — for the global admin "Coachs" panel
+  var playersFilterTeamId = "";  // "" = toutes les équipes, in the admin "Joueurs" panel
 
   // ---------- identity / admin / team persistence ----------
   function loadIdentity() {
@@ -1652,12 +1654,26 @@
       btn.addEventListener("click", function () { removeGym(btn.getAttribute("data-id")); });
     });
   }
+  function populatePlayersTeamFilter() {
+    var sel = document.getElementById("playersTeamFilter");
+    if (!sel) return;
+    var teamIds = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
+    var options = '<option value="">Toutes les équipes</option>' +
+      teamIds.map(function (tid) { return '<option value="' + tid + '">' + escapeHtml(teams[tid].name) + '</option>'; }).join("");
+    sel.innerHTML = options;
+    sel.value = playersFilterTeamId;
+  }
   function renderAdminMembersList() {
     var el = document.getElementById("membersList");
     if (!el) return;
-    var slugs = Object.keys(allAssignments).sort(function (a, b) { return allAssignments[a].name.localeCompare(allAssignments[b].name); });
+    var slugs = Object.keys(allAssignments)
+      .filter(function (slug) { return !playersFilterTeamId || allAssignments[slug].teamId === playersFilterTeamId; })
+      .sort(function (a, b) { return allAssignments[a].name.localeCompare(allAssignments[b].name); });
     var teamIds = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
-    if (slugs.length === 0) { el.innerHTML = '<div class="empty-mini">Personne n\'a encore rejoint d\'équipe.</div>'; return; }
+    if (slugs.length === 0) {
+      el.innerHTML = '<div class="empty-mini">' + (playersFilterTeamId ? "Aucun joueur dans cette équipe." : "Personne n'a encore rejoint d'équipe.") + '</div>';
+      return;
+    }
     el.innerHTML = slugs.map(function (slug) {
       var a = allAssignments[slug];
       var options = teamIds.map(function (tid) {
@@ -1724,6 +1740,7 @@
   function openAdminOverlay() {
     setAdminTab("gyms");
     populateNewCoachTeamSelect();
+    populatePlayersTeamFilter();
     renderAdminCoachList();
     renderAdminGymList();
     renderAdminMembersList();
@@ -2174,6 +2191,10 @@
     input.value = "";
   });
   wireAddressAutocomplete("newGymAddress", "newGymAddressResults", function (coords) { selectedGymCoords = coords; });
+  document.getElementById("playersTeamFilter").addEventListener("change", function () {
+    playersFilterTeamId = this.value;
+    renderAdminMembersList();
+  });
   document.getElementById("newGymAdd").addEventListener("click", function () {
     var nameInput = document.getElementById("newGymName");
     var addrInput = document.getElementById("newGymAddress");

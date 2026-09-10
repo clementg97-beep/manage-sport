@@ -400,6 +400,25 @@
   .cal-dot.match { background: var(--indispo); }
   .cal-agenda-heading { font-size: 12.5px; font-weight: 800; color: var(--text-muted); margin: 4px 2px 8px; text-transform: capitalize; }
 
+  .view-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+  .view-mode-btn {
+    flex: 1; border: 1.5px solid var(--border); background: var(--bg-card); color: var(--text-muted);
+    padding: 11px; border-radius: var(--radius-md); font-weight: 800; font-size: 13.5px; cursor: pointer;
+  }
+  .view-mode-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+  .week-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; -webkit-overflow-scrolling: touch; }
+  .week-col { flex: 0 0 128px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); padding: 8px; min-height: 110px; }
+  .week-col.today { border-color: var(--accent); border-width: 2px; }
+  .week-col-head { font-size: 11px; font-weight: 800; text-align: center; margin-bottom: 8px; text-transform: capitalize; color: var(--text-muted); }
+  .week-col.today .week-col-head { color: var(--accent); }
+  .week-event {
+    font-size: 10.5px; padding: 5px 6px; border-radius: 6px; margin-bottom: 5px;
+    background: var(--accent-soft); color: var(--accent); cursor: pointer; font-weight: 700; line-height: 1.3;
+  }
+  .week-event.match { background: var(--indispo-soft); color: var(--indispo); }
+  .week-event-empty { font-size: 10px; color: var(--text-muted); text-align: center; padding-top: 10px; }
+
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
     background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 999px;
@@ -424,7 +443,6 @@
     <button class="team-chip" id="teamChip" style="display:none;">👥 Équipe : <span id="teamChipName">—</span><span id="teamChipArrow"> ▾</span></button>
   </div>
   <div class="top-actions">
-    <button class="icon-btn" id="icsExportBtn" title="Exporter vers mon calendrier (.ics)" style="display:none;">📤</button>
     <button class="icon-btn" id="adminBtn" title="Administration" style="display:none;">⚙️</button>
     <button class="icon-btn" id="bellBtn" title="Notifications">
       🔔<span class="badge-dot" id="bellBadge" style="display:none;">0</span>
@@ -448,11 +466,23 @@
 
   <div id="actionBanner"></div>
 
-  <div class="tabs">
-    <button class="tab active" data-tab="upcoming">À venir</button>
-    <button class="tab" data-tab="past">Passées</button>
-    <button class="tab" data-tab="calendar">📅 Mois</button>
+  <div class="view-toggle">
+    <button class="view-mode-btn active" id="viewModeList">📋 Liste</button>
+    <button class="view-mode-btn" id="viewModeCalendar">🗓️ Calendrier</button>
   </div>
+
+  <div class="tabs" id="listTabs">
+    <button class="tab active" data-tab="upcoming">📝 À venir</button>
+    <button class="tab" data-tab="past">📭 Passées</button>
+  </div>
+
+  <div class="tabs" id="calTabs" style="display:none;">
+    <button class="tab active" data-cal-view="month">🗓️ Mois</button>
+    <button class="tab" data-cal-view="week">📆 Semaine</button>
+    <button class="tab" data-cal-view="day">📋 Jour</button>
+  </div>
+
+  <button type="button" class="link-btn" id="icsExportBtn" style="display:none; margin-bottom:10px;">📤 Exporter vers mon calendrier (.ics)</button>
 
   <div id="calendarView" style="display:none;"></div>
   <div id="sessionList"></div>
@@ -808,6 +838,8 @@
   var people = {};          // slug -> {name, role} (current team)
   var coachWhitelist = {};  // slug -> {name} (current team)
   var currentTab = "upcoming";
+  var viewMode = "list";   // "list" | "calendar"
+  var calSubView = "month"; // "month" | "week" | "day"
   var calendarMonth = new Date(); calendarMonth.setDate(1);
   var selectedCalDay = null;
   var openRosterIds = {};
@@ -902,7 +934,7 @@
     document.getElementById("avatarInit").textContent = initials(identity.name);
     document.getElementById("fabAdd").style.display = (canCreateSessions() && teamId) ? "flex" : "none";
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
-    document.getElementById("icsExportBtn").style.display = teamId ? "flex" : "none";
+    document.getElementById("icsExportBtn").style.display = teamId ? "block" : "none";
   }
 
   // ---------- db path helpers ----------
@@ -1935,9 +1967,31 @@
     html += '</div>';
     return html;
   }
+  function ymd(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function sessionsByDate() {
+    var byDate = {};
+    Object.keys(sessions).forEach(function (id) {
+      var s = sessions[id];
+      if (!byDate[s.date]) byDate[s.date] = [];
+      byDate[s.date].push(s);
+    });
+    return byDate;
+  }
+  function agendaHtml(daySessions) {
+    var sorted = daySessions.slice().sort(function (a, b) { return a.time < b.time ? -1 : 1; });
+    if (sorted.length === 0) return '<div class="empty-mini">Aucune séance ce jour-là.</div>';
+    return sorted.map(function (s) { return sessionCardHtml(s); }).join("");
+  }
   function renderCalendarView() {
     var el = document.getElementById("calendarView");
     if (!selectedCalDay) selectedCalDay = todayStr();
+    if (calSubView === "week") renderWeekCalView(el);
+    else if (calSubView === "day") renderDayCalView(el);
+    else renderMonthCalView(el);
+  }
+  function renderMonthCalView(el) {
     var year = calendarMonth.getFullYear(), month = calendarMonth.getMonth();
     var monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(calendarMonth);
     var firstOfMonth = new Date(year, month, 1);
@@ -1945,13 +1999,7 @@
     var daysInMonth = new Date(year, month + 1, 0).getDate();
     var totalCells = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
     var todayS = todayStr();
-
-    var byDate = {};
-    Object.keys(sessions).forEach(function (id) {
-      var s = sessions[id];
-      if (!byDate[s.date]) byDate[s.date] = [];
-      byDate[s.date].push(s);
-    });
+    var byDate = sessionsByDate();
 
     var html = '<div class="cal-header">' +
       '<button type="button" class="cal-nav-btn" data-cal-nav="prev">‹</button>' +
@@ -1961,7 +2009,7 @@
     html += '<div class="cal-grid">';
     for (var i = 0; i < totalCells; i++) {
       var cellDate = new Date(year, month, i - startWeekday + 1);
-      var dateStr = cellDate.getFullYear() + "-" + String(cellDate.getMonth() + 1).padStart(2, "0") + "-" + String(cellDate.getDate()).padStart(2, "0");
+      var dateStr = ymd(cellDate);
       var inMonth = cellDate.getMonth() === month;
       var daySessions = byDate[dateStr] || [];
       var cls = "cal-day" + (inMonth ? "" : " other-month") + (dateStr === todayS ? " today" : "") + (dateStr === selectedCalDay ? " sel" : "");
@@ -1970,17 +2018,10 @@
       html += '<div class="' + cls + '" data-date="' + dateStr + '"><div class="cal-day-num">' + cellDate.getDate() + '</div><div class="cal-dots">' + dots + overflow + '</div></div>';
     }
     html += '</div>';
-
-    var daySessions2 = (byDate[selectedCalDay] || []).slice().sort(function (a, b) { return a.time < b.time ? -1 : 1; });
     html += '<div class="cal-agenda-heading">' + fmtDateHeading(selectedCalDay) + '</div>';
-    if (daySessions2.length === 0) {
-      html += '<div class="empty-mini">Aucune séance ce jour-là.</div>';
-    } else {
-      daySessions2.forEach(function (s) { html += sessionCardHtml(s); });
-    }
+    html += agendaHtml(byDate[selectedCalDay] || []);
 
     el.innerHTML = html;
-
     Array.prototype.forEach.call(el.querySelectorAll("[data-cal-nav]"), function (btn) {
       btn.addEventListener("click", function () {
         calendarMonth.setMonth(calendarMonth.getMonth() + (btn.getAttribute("data-cal-nav") === "next" ? 1 : -1));
@@ -1990,6 +2031,81 @@
     Array.prototype.forEach.call(el.querySelectorAll(".cal-day"), function (cell) {
       cell.addEventListener("click", function () {
         selectedCalDay = cell.getAttribute("data-date");
+        renderCalendarView();
+      });
+    });
+    wireSessionCardEvents(el);
+  }
+  function renderWeekCalView(el) {
+    var ref = new Date(selectedCalDay + "T00:00:00");
+    var weekday = (ref.getDay() + 6) % 7; // lundi = 0
+    var monday = new Date(ref); monday.setDate(ref.getDate() - weekday);
+    var todayS = todayStr();
+    var byDate = sessionsByDate();
+    var weekdayLabels = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+    var sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    var rangeLabel = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(monday) +
+      " – " + new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(sunday);
+
+    var html = '<div class="cal-header">' +
+      '<button type="button" class="cal-nav-btn" data-cal-nav="prev">‹</button>' +
+      '<h3>' + escapeHtml(rangeLabel) + '</h3>' +
+      '<button type="button" class="cal-nav-btn" data-cal-nav="next">›</button></div>';
+    html += '<div class="week-grid">';
+    var cols = [];
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(monday); d.setDate(monday.getDate() + i);
+      var dateStr = ymd(d);
+      cols.push(dateStr);
+      var daySessions = (byDate[dateStr] || []).slice().sort(function (a, b) { return a.time < b.time ? -1 : 1; });
+      html += '<div class="week-col' + (dateStr === todayS ? " today" : "") + '" data-date="' + dateStr + '">';
+      html += '<div class="week-col-head">' + weekdayLabels[i] + '<br>' + d.getDate() + '</div>';
+      if (daySessions.length === 0) {
+        html += '<div class="week-event-empty">—</div>';
+      } else {
+        daySessions.forEach(function (s) {
+          html += '<div class="week-event' + (s.type === "match" ? " match" : "") + '" data-date="' + dateStr + '">' + s.time + '<br>' + escapeHtml(sessionLabel(s)) + '</div>';
+        });
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<div class="cal-agenda-heading">' + fmtDateHeading(selectedCalDay) + '</div>';
+    html += agendaHtml(byDate[selectedCalDay] || []);
+
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-cal-nav]"), function (btn) {
+      btn.addEventListener("click", function () {
+        selectedCalDay = ymd(new Date(new Date(selectedCalDay + "T00:00:00").setDate(new Date(selectedCalDay + "T00:00:00").getDate() + (btn.getAttribute("data-cal-nav") === "next" ? 7 : -7))));
+        renderCalendarView();
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll(".week-col, .week-event"), function (elx) {
+      elx.addEventListener("click", function (e) {
+        e.stopPropagation();
+        selectedCalDay = elx.getAttribute("data-date");
+        renderCalendarView();
+      });
+    });
+    wireSessionCardEvents(el);
+  }
+  function renderDayCalView(el) {
+    var d = new Date(selectedCalDay + "T00:00:00");
+    var dayLabel = fmtDateHeading(selectedCalDay);
+    var byDate = sessionsByDate();
+
+    var html = '<div class="cal-header">' +
+      '<button type="button" class="cal-nav-btn" data-cal-nav="prev">‹</button>' +
+      '<h3>' + escapeHtml(dayLabel) + '</h3>' +
+      '<button type="button" class="cal-nav-btn" data-cal-nav="next">›</button></div>';
+    html += agendaHtml(byDate[selectedCalDay] || []);
+
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-cal-nav]"), function (btn) {
+      btn.addEventListener("click", function () {
+        var nd = new Date(selectedCalDay + "T00:00:00");
+        nd.setDate(nd.getDate() + (btn.getAttribute("data-cal-nav") === "next" ? 1 : -1));
+        selectedCalDay = ymd(nd);
         renderCalendarView();
       });
     });
@@ -2005,7 +2121,7 @@
       list.innerHTML = '<div class="empty"><div class="e-icon">👥</div><div class="e-title">Choisis une équipe</div><div class="e-sub">Utilise le sélecteur en haut pour rejoindre une équipe.</div></div>';
       return;
     }
-    if (currentTab === "calendar") {
+    if (viewMode === "calendar") {
       list.style.display = "none";
       calView.style.display = "block";
       renderCalendarView();
@@ -2295,14 +2411,32 @@
   document.getElementById("fabAdd").addEventListener("click", function () { openSessionSheet(null); });
   document.getElementById("sessionCancel").addEventListener("click", closeSessionSheet);
   document.getElementById("sessionSave").addEventListener("click", saveSession);
-  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
+  Array.prototype.forEach.call(document.querySelectorAll("#listTabs .tab"), function (t) {
     t.addEventListener("click", function () {
-      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (x) { x.classList.remove("active"); });
+      Array.prototype.forEach.call(document.querySelectorAll("#listTabs .tab"), function (x) { x.classList.remove("active"); });
       t.classList.add("active");
       currentTab = t.getAttribute("data-tab");
       renderAll();
     });
   });
+  Array.prototype.forEach.call(document.querySelectorAll("#calTabs .tab"), function (t) {
+    t.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll("#calTabs .tab"), function (x) { x.classList.remove("active"); });
+      t.classList.add("active");
+      calSubView = t.getAttribute("data-cal-view");
+      renderCalendarView();
+    });
+  });
+  function setViewMode(mode) {
+    viewMode = mode;
+    document.getElementById("viewModeList").classList.toggle("active", mode === "list");
+    document.getElementById("viewModeCalendar").classList.toggle("active", mode === "calendar");
+    document.getElementById("listTabs").style.display = mode === "list" ? "flex" : "none";
+    document.getElementById("calTabs").style.display = mode === "calendar" ? "flex" : "none";
+    renderAll();
+  }
+  document.getElementById("viewModeList").addEventListener("click", function () { setViewMode("list"); });
+  document.getElementById("viewModeCalendar").addEventListener("click", function () { setViewMode("calendar"); });
   Array.prototype.forEach.call(document.querySelectorAll(".overlay"), function (ov) {
     ov.addEventListener("click", function (e) {
       if (e.target !== ov) return;

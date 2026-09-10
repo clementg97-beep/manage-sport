@@ -289,6 +289,13 @@
   }
   @media (min-width: 640px) { .sheet { border-radius: 20px; max-height: 86vh; } }
   .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 4px; margin: 0 auto 14px; }
+  .sheet-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+  .sheet-header h2 { margin: 0; }
+  .sheet-close-x {
+    border: none; background: var(--bg-card); color: var(--text-muted); width: 32px; height: 32px;
+    border-radius: 50%; font-size: 16px; font-weight: 800; cursor: pointer; flex-shrink: 0;
+  }
+  .notes-body { font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
   .sheet h2 { font-size: 18px; margin: 0 0 16px; font-weight: 800; }
   .sheet h3 { font-size: 13px; margin: 18px 0 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
   .sheet h3:first-of-type { margin-top: 0; }
@@ -643,6 +650,17 @@
     <h2 id="lineupPickerTitle">Poste</h2>
     <div id="lineupPickerList"></div>
     <button class="btn-secondary" id="lineupPickerCancel">Fermer</button>
+  </div>
+</div>
+
+<!-- Session notes / training program sheet -->
+<div class="overlay" id="notesOverlay">
+  <div class="sheet">
+    <div class="sheet-header">
+      <h2 id="notesOverlayTitle">Notes</h2>
+      <button type="button" class="sheet-close-x" id="notesOverlayCloseX">✕</button>
+    </div>
+    <div class="notes-body" id="notesOverlayBody"></div>
   </div>
 </div>
 
@@ -1678,6 +1696,15 @@
   document.getElementById("lineupPickerCancel").addEventListener("click", function () {
     document.getElementById("lineupPickerOverlay").classList.remove("show");
   });
+  function openNotesOverlay(s) {
+    if (!s || !s.notes) return;
+    document.getElementById("notesOverlayTitle").textContent = s.type === "match" ? "Notes du match" : "Programme d'entraînement";
+    document.getElementById("notesOverlayBody").textContent = s.notes;
+    document.getElementById("notesOverlay").classList.add("show");
+  }
+  document.getElementById("notesOverlayCloseX").addEventListener("click", function () {
+    document.getElementById("notesOverlay").classList.remove("show");
+  });
   function readLineupFromForm() {
     return setsDraft;
   }
@@ -2302,7 +2329,7 @@
     html += '<div class="card-title">' + escapeHtml(sessionLabel(s)) + '</div>';
     html += '<div class="card-meta"><span>📍 ' + escapeHtml(s.gymName || "") + '</span>' + (s.court ? '<span>· ' + escapeHtml(s.court) + '</span>' : '') + '</div>';
     html += '<div class="card-coaches">🧑‍🏫 ' + escapeHtml(coachesLabel) + '</div>';
-    if (s.notes) html += '<div class="card-coaches">📎 ' + escapeHtml(s.notes) + '</div>';
+    if (s.notes) html += '<button type="button" class="link-btn" data-act="notes" data-id="' + s.id + '" style="color:var(--accent); padding-top:2px;">📎 ' + (s.type === "match" ? "Voir les notes" : "Voir le programme") + '</button>';
     html += '</div></div>';
 
     if (s.type === "match" && s.sets) {
@@ -2654,6 +2681,12 @@
         if (effectiveRole() !== "coach" && effectiveRole() !== "joueur") return;
         openRosterIds[id] = !openRosterIds[id];
         renderAll();
+      });
+    });
+    Array.prototype.forEach.call(container.querySelectorAll('[data-act="notes"]'), function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openNotesOverlay(sessions[btn.getAttribute("data-id")]);
       });
     });
     Array.prototype.forEach.call(container.querySelectorAll('[data-act="avail"]'), function (btn) {

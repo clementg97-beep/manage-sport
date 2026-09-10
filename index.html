@@ -228,7 +228,7 @@
   .chip.peutetre.sel { background: var(--peutetre-soft); border-color: var(--peutetre); color: var(--peutetre); }
   .chip.indispo.sel { background: var(--indispo-soft); border-color: var(--indispo); color: var(--indispo); }
 
-  .stat-row { display: flex; gap: 6px; padding: 0 14px 14px; flex-wrap: wrap; }
+  .stat-row { display: flex; gap: 6px; padding: 0 14px 14px; flex-wrap: wrap; cursor: pointer; }
   .pill { font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
   .pill.dispo { background: var(--dispo-soft); color: var(--dispo); }
   .pill.peutetre { background: var(--peutetre-soft); color: var(--peutetre); }
@@ -2369,7 +2369,7 @@
 
     if (role === "coach" || role === "joueur") {
       var sr = statAndRoster(s.id);
-      html += '<div class="stat-row">';
+      html += '<div class="stat-row" data-role="toggle-roster">';
       if (sr.counts.dispo) html += '<span class="pill dispo">' + sr.counts.dispo + ' dispo</span>';
       if (sr.counts.peutetre) html += '<span class="pill peutetre">' + sr.counts.peutetre + ' peut-être</span>';
       if (sr.counts.indispo) html += '<span class="pill indispo">' + sr.counts.indispo + ' indispo</span>';

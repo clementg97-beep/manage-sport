@@ -511,7 +511,7 @@
         <div class="role-opt" data-role="coach">📋 Coach</div>
       </div>
     </label>
-    <div class="hint">Le rôle Coach doit être autorisé par l'administrateur pour chaque équipe — sinon tu restes Joueur en attendant.</div>
+    <div class="hint">Le rôle Coach doit être autorisé par l'administrateur pour chaque équipe. Sinon tu restes Joueur en attendant.</div>
     <button type="button" class="text-link" id="adminModeLink">Je suis l'administrateur du club</button>
     <label class="field" id="onboardPinField" style="display:none;">
       <span class="lbl">Code administrateur</span>
@@ -547,7 +547,7 @@
   <div class="sheet">
     <div class="sheet-handle"></div>
     <h2>Choisir une photo d'équipe</h2>
-    <div class="hint" style="margin-top:-10px;">Photos officielles Everton Volleyball — choisis celle qui correspond au niveau/genre de l'équipe.</div>
+    <div class="hint" style="margin-top:-10px;">Photos officielles Everton Volleyball. Choisis celle qui correspond au niveau/genre de l'équipe.</div>
     <div class="photo-grid" id="photoGrid"></div>
     <button class="btn-secondary" id="photoPickerCancel">Annuler</button>
   </div>
@@ -581,14 +581,14 @@
 
     <div class="admin-panel" data-admin-panel="players" style="display:none;">
       <h3>Joueurs</h3>
-      <div class="hint" style="margin-top:-4px;">Un joueur est verrouillé sur son équipe une fois assigné — change son équipe ici si besoin, il disparaîtra de cette liste et rejoindra celle de sa nouvelle équipe.</div>
+      <div class="hint" style="margin-top:-4px;">Un joueur est verrouillé sur son équipe une fois assigné. Change son équipe ici si besoin, il disparaîtra de cette liste et rejoindra celle de sa nouvelle équipe.</div>
       <select id="playersTeamFilter" style="margin-bottom:12px;"></select>
       <div id="membersList"></div>
     </div>
 
     <div class="admin-panel" data-admin-panel="coachs" style="display:none;">
       <h3>Coachs (toutes équipes)</h3>
-      <div class="hint" style="margin-top:-4px;">Chaque coach n'a accès qu'à l'équipe choisie ici — ajoute-le à plusieurs équipes s'il en gère plus d'une.</div>
+      <div class="hint" style="margin-top:-4px;">Chaque coach n'a accès qu'à l'équipe choisie ici. Ajoute-le à plusieurs équipes s'il en gère plus d'une.</div>
       <input type="text" id="newCoachName" placeholder="Nom du coach" maxlength="40" style="margin-bottom:8px;">
       <select id="newCoachTeam" style="margin-bottom:8px;"></select>
       <select id="newCoachPermission" style="margin-bottom:8px;">
@@ -650,14 +650,14 @@
         <datalist id="courtList"></datalist>
       </label>
     </div>
-    <div class="hint" id="noGymHint" style="display:none;">Aucun gymnase enregistré — demande à un administrateur d'en ajouter un depuis Administration (⚙️).</div>
+    <div class="hint" id="noGymHint" style="display:none;">Aucun gymnase enregistré. Demande à un administrateur d'en ajouter un depuis Administration (⚙️).</div>
     <label class="field">
       <span class="lbl">Coach(s) assigné(s)</span>
       <div class="coach-picker" id="coachPicker"></div>
     </label>
     <div id="lineupSection" style="display:none;">
       <h3>Alignement</h3>
-      <div class="hint" style="margin-top:-6px;">Optionnel — peut être rempli plus tard, une fois les disponibilités connues.</div>
+      <div class="hint" style="margin-top:-6px;">Optionnel. Peut être rempli plus tard, une fois les disponibilités connues.</div>
       <div class="row2" id="lineupGrid"></div>
       <div class="hint" id="lineupBenchHint" style="margin-top:4px;">—</div>
     </div>
@@ -1210,7 +1210,7 @@
       var origin = pos.coords.latitude + "," + pos.coords.longitude;
       window.open("https://www.google.com/maps/dir/?api=1&origin=" + origin + "&destination=" + gymQuery(gym) + "&travelmode=transit", "_blank");
     }, function () {
-      toast("Position indisponible — ouverture de la carte");
+      toast("Position indisponible. Ouverture de la carte.");
       openMap(gym);
     }, { timeout: 8000 });
   }
@@ -1254,7 +1254,7 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-    toast(ids.length + " séance(s) exportée(s) — ouvre le fichier pour l'ajouter à ton calendrier");
+    toast(ids.length + " séance(s) exportée(s). Ouvre le fichier pour l'ajouter à ton calendrier.");
   }
   function initCardMaps() {
     Object.keys(leafletMaps).forEach(function (k) { try { leafletMaps[k].remove(); } catch (e) {} });
@@ -1381,7 +1381,7 @@
     coachList = coachList.filter(function (p) { if (seen[p.name]) return false; seen[p.name] = 1; return true; });
     var el = document.getElementById("coachPicker");
     if (coachList.length === 0) {
-      el.innerHTML = '<div class="hint" style="margin:0;">Aucun coach autorisé pour l\'instant — ajoute-en depuis Administration (⚙️).</div>';
+      el.innerHTML = '<div class="hint" style="margin:0;">Aucun coach autorisé pour l\'instant. Ajoute-en depuis Administration (⚙️).</div>';
       coachSelection = [];
       return;
     }
@@ -1425,7 +1425,7 @@
       createdBy: identity ? identity.name : "inconnu",
       updatedAt: new Date().toISOString()
     };
-    if (!dbReady) { toast("Sauvegarde indisponible — vérifie la configuration Firebase"); return; }
+    if (!dbReady) { toast("Sauvegarde indisponible. Vérifie la configuration Firebase."); return; }
 
     if (editingSessionId) {
       var updateData = Object.assign({ date: date, datetime: date + "T" + time }, baseData);
@@ -1479,7 +1479,7 @@
       });
       console.log("[emailjs] Destinataires trouvés :", recipients.length, recipients.map(function (p) { return p.email; }));
       if (recipients.length === 0) {
-        toast("Aucun joueur avec courriel sur cette équipe — pas de courriel envoyé");
+        toast("Aucun joueur avec courriel sur cette équipe. Pas de courriel envoyé.");
         return;
       }
       var teamName = teams[tid] ? teams[tid].name : "";
@@ -1497,8 +1497,8 @@
       var sent = 0, failed = 0;
       function sendNext(i) {
         if (i >= params.length) {
-          if (sent > 0) toast(sent + " courriel(s) envoyé(s)" + (failed > 0 ? ", " + failed + " échec(s) — voir console (F12)" : ""));
-          else if (failed > 0) toast("Échec d'envoi des courriels — voir console (F12)");
+          if (sent > 0) toast(sent + " courriel(s) envoyé(s)." + (failed > 0 ? " " + failed + " échec(s). Voir console (F12)." : ""));
+          else if (failed > 0) toast("Échec d'envoi des courriels. Voir console (F12).");
           return;
         }
         emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.newSessionTemplateId, params[i])
@@ -1509,7 +1509,7 @@
       sendNext(0);
     }).catch(function (err) {
       console.error("[emailjs] Erreur de lecture des joueurs de l'équipe", err);
-      toast("Erreur lors de la préparation des courriels — voir console (F12)");
+      toast("Erreur lors de la préparation des courriels. Voir console (F12).");
     });
   }
   function deleteSession(id) {
@@ -1531,7 +1531,7 @@
   // ---------- availability ----------
   function saveAvailabilityFields(sessionId, fields) {
     if (!identity || !teamId) return;
-    if (!dbReady) { toast("Réponse indisponible — vérifie la configuration Firebase"); return; }
+    if (!dbReady) { toast("Réponse indisponible. Vérifie la configuration Firebase."); return; }
     var docId = sessionId + "_" + slugify(identity.name);
     var data = Object.assign({ sessionId: sessionId, player: identity.name, updatedAt: new Date().toISOString() }, fields);
     availCol(teamId).doc(docId).set(data, { merge: true }).catch(function () { toast("Erreur d'enregistrement"); });
@@ -1576,7 +1576,7 @@
     gymsCol().doc(slug).set(data)
       .then(function () {
         if (lat && lng) { toast("Gymnase ajouté"); }
-        else { toast("Gymnase ajouté — repérage sur la carte en cours…"); geocodeAndSave(slug, address); }
+        else { toast("Gymnase ajouté. Repérage sur la carte en cours…"); geocodeAndSave(slug, address); }
       })
       .catch(function () { toast("Erreur"); });
   }
@@ -1614,14 +1614,14 @@
       });
       return;
     }
-    if (!isAdmin && myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe — demande-lui."); return; }
+    if (!isAdmin && myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe. Demande-lui."); return; }
     openTeamOverlay();
   });
   function renderTeamList() {
     var el = document.getElementById("teamList");
     var ids = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
     if (ids.length === 0) {
-      el.innerHTML = '<div class="empty-mini">' + (isAdmin ? "Aucune équipe pour l'instant — crée la première ci-dessous." : "Aucune équipe pour l'instant — demande à l'administrateur d'en créer une.") + '</div>';
+      el.innerHTML = '<div class="empty-mini">' + (isAdmin ? "Aucune équipe pour l'instant. Crée la première ci-dessous." : "Aucune équipe pour l'instant. Demande à l'administrateur d'en créer une.") + '</div>';
     } else {
       el.innerHTML = ids.map(function (id) {
         return '<button type="button" class="team-row' + (id === teamId ? ' active' : '') + '" data-team="' + id + '">' + escapeHtml(teams[id].name) + (id === teamId ? ' ✓' : '') + '</button>';
@@ -1826,7 +1826,7 @@
     if (!identity || !teamId) { el.innerHTML = ""; return; }
     var html = "";
     if (isPendingCoach()) {
-      html += '<div class="banner warn"><span class="banner-icon">⏳</span>Rôle Coach en attente d\'autorisation pour cette équipe — tu es affiché comme Joueur. Demande à l\'administrateur de t\'ajouter.</div>';
+      html += '<div class="banner warn"><span class="banner-icon">⏳</span>Rôle Coach en attente d\'autorisation pour cette équipe. Tu es affiché comme Joueur. Demande à l\'administrateur de t\'ajouter.</div>';
     }
     if (effectiveRole() === "joueur") {
       var urgentIds = pendingSessionsForPlayer().filter(function (id) { return isUrgent(sessions[id]); });
@@ -1907,7 +1907,7 @@
     var urgent = !isPast && isUrgent(s);
     if (role === "joueur" && !isPast) {
       if (urgent && !myStatus) {
-        html += '<div class="banner warn" style="margin:0 14px 10px;"><span class="banner-icon">⏰</span>Séance dans moins de 6h — réponds vite !</div>';
+        html += '<div class="banner warn" style="margin:0 14px 10px;"><span class="banner-icon">⏰</span>Séance dans moins de 6h. Réponds vite !</div>';
       }
       html += '<div class="chips-row">';
       ["dispo","peutetre","indispo"].forEach(function (st) {
@@ -2271,7 +2271,7 @@
     } else if (Notification.permission === "granted") {
       permRow.innerHTML = " Rappels activés sur cet appareil.";
     } else if (Notification.permission === "denied") {
-      permRow.innerHTML = " Rappels bloqués — active-les dans les réglages de ton navigateur.";
+      permRow.innerHTML = " Rappels bloqués. Active-les dans les réglages de ton navigateur.";
     } else {
       permRow.innerHTML = ' <button class="link-btn" id="enableNotifBtn" style="text-decoration:underline;">Activer les rappels sur cet appareil</button>';
       setTimeout(function () {
@@ -2328,7 +2328,7 @@
     input.value = "";
   });
   document.getElementById("teamChip").addEventListener("click", function () {
-    if (!isAdmin && myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe — demande-lui."); return; }
+    if (!isAdmin && myAssignment && myAssignment.teamId) { toast("Seul l'administrateur peut changer ton équipe. Demande-lui."); return; }
     openTeamOverlay();
   });
   document.getElementById("teamOverlayClose").addEventListener("click", closeTeamOverlay);

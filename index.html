@@ -2753,6 +2753,29 @@
     sel1.value = selectedPos || "";
     sel2.value = selectedPos2 || "";
   }
+  // Premier lancement sur un nouvel appareil/navigateur : si le nom tapé
+  // correspond à quelqu'un déjà connu (assignments), va chercher son
+  // profil existant (courriel, poste, rôle) et préremplit — évite de
+  // tout retaper. Ne s'applique qu'à la toute première inscription
+  // (identity encore vide), jamais en modification de profil.
+  function tryPrefillFromExistingProfile(name) {
+    if (identity || !dbReady || !name) return;
+    var slug = slugify(name);
+    var assignment = allAssignments[slug];
+    if (!assignment || !assignment.teamId) return;
+    peopleCol(assignment.teamId).doc(slug).get().then(function (snap) {
+      if (!snap.exists) return;
+      var data = snap.data();
+      var emailInput = document.getElementById("onboardEmail");
+      if (data.email && !emailInput.value.trim()) emailInput.value = data.email;
+      populatePositionSelects(data.position || "", data.position2 || "");
+      if (data.role) setRoleSel(data.role);
+      toast("Profil retrouvé — champs préremplis");
+    }).catch(function () {});
+  }
+  document.getElementById("onboardName").addEventListener("blur", function () {
+    tryPrefillFromExistingProfile(this.value.trim());
+  });
   document.getElementById("identityChip").addEventListener("click", function () {
     document.getElementById("onboardTitle").textContent = "Ton profil";
     document.getElementById("onboardName").value = identity ? identity.name : "";

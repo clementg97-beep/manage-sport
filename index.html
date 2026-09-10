@@ -89,23 +89,27 @@
   .topbar {
     position: sticky; top: 0; z-index: 20;
     display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; padding: 14px 16px calc(14px + env(safe-area-inset-top, 0px));
+    gap: 8px; padding: 14px 16px calc(14px + env(safe-area-inset-top, 0px));
     padding-top: max(14px, env(safe-area-inset-top));
     background: color-mix(in srgb, var(--bg) 88%, transparent);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
-  .brand-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand-group { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+  .brand { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
   .brand-mark { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
   .brand-logo { height: 26px; width: auto; display: block; }
   .brand-sub { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .brand-text { white-space: nowrap; }
+  @media (max-width: 480px) { .brand-text { display: none; } }
   .team-chip {
-    display: inline-flex; align-items: center; gap: 8px; border: 2px solid var(--accent);
-    background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 10px 20px;
-    font-size: 16px; font-weight: 800; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; border: 2px solid var(--accent);
+    background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 9px 14px;
+    font-size: 12.5px; font-weight: 800; cursor: pointer;
+    min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   }
+  .team-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .photo-opt {
     border: 2px solid var(--border); border-radius: var(--radius-md); overflow: hidden;
@@ -134,7 +138,7 @@
     background: rgba(15,18,24,0.45); color: #fff; font-size: 11px; font-weight: 700;
     padding: 4px 10px; border-radius: 999px;
   }
-  .top-actions { display: flex; align-items: center; gap: 8px; }
+  .top-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .icon-btn {
     position: relative; border: 1px solid var(--border); background: var(--bg-card);
     color: var(--text); width: 38px; height: 38px; border-radius: 50%;
@@ -188,6 +192,10 @@
     cursor: pointer; white-space: nowrap;
   }
   .admin-tab.active { background: var(--accent); color: var(--accent-ink); }
+  .admin-sticky-head {
+    position: sticky; top: 0; z-index: 5; background: var(--bg-raised);
+    margin: -18px -18px 18px; padding: 18px 18px 14px;
+  }
 
   .date-heading {
     font-size: 12.5px; font-weight: 800; color: var(--text-muted); text-transform: capitalize;
@@ -514,7 +522,7 @@
 <div class="topbar">
   <div class="brand-group">
     <div class="brand">
-      <span class="brand-mark"><img class="brand-logo" src="logo.png" alt="Everton Volleyball"> Manage-sport</span>
+      <span class="brand-mark"><img class="brand-logo" src="logo.png" alt="Everton Volleyball"><span class="brand-text">Manage-sport</span></span>
     </div>
     <button class="team-chip" id="teamChip" style="display:none;">👥 Équipe : <span id="teamChipName">—</span><span id="teamChipArrow"> ▾</span></button>
   </div>
@@ -667,14 +675,16 @@
 <!-- Admin panel sheet -->
 <div class="overlay" id="adminOverlay">
   <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h2>Administration</h2>
+    <div class="admin-sticky-head">
+      <div class="sheet-handle"></div>
+      <h2>Administration</h2>
 
-    <div class="tabs" style="margin-bottom:18px;">
-      <button class="admin-tab active" data-admin-tab="gyms">🏟️ Gymnases</button>
-      <button class="admin-tab" data-admin-tab="players">🏃 Joueurs</button>
-      <button class="admin-tab" data-admin-tab="coachs">📋 Coachs</button>
-      <button class="admin-tab" data-admin-tab="admins">🔑 Admins</button>
+      <div class="tabs" style="margin-bottom:0;">
+        <button class="admin-tab active" data-admin-tab="gyms">🏟️ Gymnases</button>
+        <button class="admin-tab" data-admin-tab="players">🏃 Joueurs</button>
+        <button class="admin-tab" data-admin-tab="coachs">📋 Coachs</button>
+        <button class="admin-tab" data-admin-tab="admins">🔑 Admins</button>
+      </div>
     </div>
 
     <div class="admin-panel" data-admin-panel="gyms">

@@ -1148,6 +1148,7 @@
       snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
       adminNames = next;
       renderAdminAdminsList();
+      revalidateAdminStatus();
     }, function () { /* degrade quietly */ });
 
     coachGrantsCol().onSnapshot(function (snap) {
@@ -1406,7 +1407,8 @@
   function openSessionSheet(id) {
     editingSessionId = id || null;
     var s = id ? sessions[id] : null;
-    document.getElementById("sessionSheetTitle").textContent = id ? "Modifier la séance" : "Nouvelle séance";
+    document.getElementById("sessionSheetTitle").textContent = (id ? "Modifier la séance" : "Nouvelle séance") +
+      (!isGlobalTeam && teamId && teams[teamId] ? " · " + teams[teamId].name : "");
     setTypeSel(s ? (s.type || "pratique") : "pratique");
     document.getElementById("fDate").value = s ? s.date : todayStr();
     document.getElementById("fTime").value = s ? s.time : "18:30";
@@ -2070,6 +2072,22 @@
     if (!confirm("Retirer les droits administrateur de cette personne ?")) return;
     adminsCol().doc(slug).delete().then(function () { toast("Administrateur retiré"); })
       .catch(function () { toast("Erreur"); });
+  }
+  // Révoque isAdmin sur cet appareil si le nom n'est plus dans la liste
+  // (ni l'admin principal) — se déclenche automatiquement en direct dès
+  // que l'administrateur retire quelqu'un, sans que la personne retirée
+  // n'ait besoin de se désactiver elle-même.
+  function revalidateAdminStatus() {
+    if (!isAdmin || !identity) return;
+    var slug = slugify(identity.name);
+    var stillAdmin = slug === slugify(ADMIN_NAME) || !!adminNames[slug];
+    if (stillAdmin) return;
+    isAdmin = false;
+    try { localStorage.removeItem("creneau_admin"); } catch (e) {}
+    if (isGlobalTeam) { isGlobalTeam = false; unsubscribeGlobalSessions(); }
+    toast("Tes droits administrateur ont été retirés");
+    if (dbReady) subscribeMyAssignment();
+    renderAll();
   }
   function setAdminTab(tab) {
     Array.prototype.forEach.call(document.querySelectorAll(".admin-tab"), function (btn) {

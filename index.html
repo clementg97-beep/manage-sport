@@ -493,7 +493,6 @@
   <div class="sheet">
     <div class="sheet-handle"></div>
     <h2>Administration</h2>
-    <div class="hint" id="adminTeamHint" style="margin-top:-10px;">—</div>
 
     <div class="tabs" style="margin-bottom:18px;">
       <button class="admin-tab active" data-admin-tab="gyms">🏟️ Gymnases</button>
@@ -519,12 +518,12 @@
     </div>
 
     <div class="admin-panel" data-admin-panel="coachs" style="display:none;">
-      <h3>Coachs autorisés pour cette équipe</h3>
-      <div class="inline-add">
-        <input type="text" id="newCoachName" placeholder="Nom du coach" maxlength="40">
-        <button type="button" id="newCoachAdd">Ajouter</button>
-      </div>
-      <div id="coachWhitelistList"></div>
+      <h3>Coachs (toutes équipes)</h3>
+      <div class="hint" style="margin-top:-4px;">Chaque coach n'a accès qu'à l'équipe choisie ici — ajoute-le à plusieurs équipes s'il en gère plus d'une.</div>
+      <input type="text" id="newCoachName" placeholder="Nom du coach" maxlength="40" style="margin-bottom:8px;">
+      <select id="newCoachTeam" style="margin-bottom:8px;"></select>
+      <button type="button" id="newCoachAdd" class="btn-primary" style="margin-top:0;">Ajouter</button>
+      <div id="coachWhitelistList" style="margin-top:10px;"></div>
     </div>
 
     <div class="admin-panel" data-admin-panel="admins" style="display:none;">
@@ -779,6 +778,7 @@
   var myAssignmentUnsub = null;
   var allAssignments = {};       // slug -> {name, teamId} — for the admin "Membres" panel
   var adminNames = {};           // slug -> {name} — additional admins beyond ADMIN_NAME
+  var allCoachGrants = {};       // docId (teamId_slug) -> {name, teamId} — for the global admin "Coachs" panel
 
   // ---------- identity / admin / team persistence ----------
   function loadIdentity() {
@@ -852,11 +852,11 @@
   // ---------- db path helpers ----------
   function teamsCol() { return db.collection("teams"); }
   function gymsCol() { return db.collection("gyms"); }
-  function coachesCol(tid) { return db.collection("teams/" + tid + "/coaches"); }
   function sessionsCol(tid) { return db.collection("teams/" + tid + "/sessions"); }
   function availCol(tid) { return db.collection("teams/" + tid + "/availability"); }
   function peopleCol(tid) { return db.collection("teams/" + tid + "/people"); }
   function assignmentsCol() { return db.collection("assignments"); }
+  function coachGrantsCol() { return db.collection("coachGrants"); }
   function adminsCol() { return db.collection("admins"); }
 
   // ---------- geocoding (best-effort, only for gyms an admin adds without coords) ----------
@@ -892,6 +892,8 @@
       renderTeamChip();
       renderTeamList();
       renderAdminMembersList();
+      renderAdminCoachList();
+      recomputeCoachWhitelistForCurrentTeam();
       renderAll();
       if (identity && isAdmin && !teamId) openTeamOverlay();
     }, function () {
@@ -912,6 +914,14 @@
       snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
       adminNames = next;
       renderAdminAdminsList();
+    }, function () { /* degrade quietly */ });
+
+    coachGrantsCol().onSnapshot(function (snap) {
+      var next = {};
+      snap.docs.forEach(function (d) { next[d.id] = Object.assign({ id: d.id }, d.data()); });
+      allCoachGrants = next;
+      recomputeCoachWhitelistForCurrentTeam();
+      renderAdminCoachList();
     }, function () { /* degrade quietly */ });
 
     gymsCol().onSnapshot(function (snap) {
@@ -980,13 +990,16 @@
       renderAll();
     }, function () { /* degrade quietly */ }));
 
-    teamUnsubs.push(coachesCol(tid).onSnapshot(function (snap) {
-      var next = {};
-      snap.docs.forEach(function (d) { next[d.id] = d.data(); });
-      coachWhitelist = next;
-      renderAdminCoachList();
-      renderAll();
-    }, function () { /* degrade quietly */ }));
+    recomputeCoachWhitelistForCurrentTeam();
+  }
+  function recomputeCoachWhitelistForCurrentTeam() {
+    var next = {};
+    Object.keys(allCoachGrants).forEach(function (id) {
+      var g = allCoachGrants[id];
+      if (g.teamId === teamId) next[g.slug] = g;
+    });
+    coachWhitelist = next;
+    renderAll();
   }
 
   function selectTeam(id) {
@@ -1367,16 +1380,17 @@
       .then(function (ref) { toast("Équipe créée"); selectTeam(ref.id); })
       .catch(function () { toast("Erreur de création"); });
   }
-  function addCoachToWhitelist(name) {
-    if (!dbReady || !teamId) return;
+  function addCoachToWhitelist(name, tid) {
+    if (!dbReady || !tid) return;
     var slug = slugify(name);
-    coachesCol(teamId).doc(slug).set({ name: name, addedBy: identity ? identity.name : "", addedAt: new Date().toISOString() })
-      .then(function () { toast("Coach ajouté"); })
+    coachGrantsCol().doc(tid + "_" + slug).set({
+      name: name, teamId: tid, slug: slug, addedBy: identity ? identity.name : "", addedAt: new Date().toISOString()
+    }).then(function () { toast("Coach ajouté"); })
       .catch(function () { toast("Erreur"); });
   }
-  function removeCoachFromWhitelist(slug) {
-    if (!dbReady || !teamId) return;
-    coachesCol(teamId).doc(slug).delete().then(function () { toast("Coach retiré"); })
+  function removeCoachGrant(grantId) {
+    if (!dbReady) return;
+    coachGrantsCol().doc(grantId).delete().then(function () { toast("Coach retiré"); })
       .catch(function () { toast("Erreur"); });
   }
   function addGym(name, address) {
@@ -1450,15 +1464,22 @@
   function renderAdminCoachList() {
     var el = document.getElementById("coachWhitelistList");
     if (!el) return;
-    var slugs = Object.keys(coachWhitelist);
-    if (slugs.length === 0) { el.innerHTML = '<div class="empty-mini">Aucun coach autorisé pour cette équipe.</div>'; return; }
-    el.innerHTML = slugs.map(function (slug) {
-      var c = coachWhitelist[slug];
-      return '<div class="list-row"><span class="lr-main">' + escapeHtml(c.name) + '</span>' +
-        '<button type="button" class="lr-del" data-slug="' + slug + '">Retirer</button></div>';
+    var ids = Object.keys(allCoachGrants).sort(function (a, b) {
+      var ga = allCoachGrants[a], gb = allCoachGrants[b];
+      var ta = teams[ga.teamId] ? teams[ga.teamId].name : "";
+      var tb = teams[gb.teamId] ? teams[gb.teamId].name : "";
+      return (ta + ga.name).localeCompare(tb + gb.name);
+    });
+    if (ids.length === 0) { el.innerHTML = '<div class="empty-mini">Aucun coach autorisé pour l\'instant, sur aucune équipe.</div>'; return; }
+    el.innerHTML = ids.map(function (id) {
+      var g = allCoachGrants[id];
+      var tname = teams[g.teamId] ? teams[g.teamId].name : "(équipe supprimée)";
+      return '<div class="list-row"><span><span class="lr-main">' + escapeHtml(g.name) + '</span>' +
+        '<div class="lr-sub">' + escapeHtml(tname) + '</div></span>' +
+        '<button type="button" class="lr-del" data-id="' + id + '">Retirer</button></div>';
     }).join("");
     Array.prototype.forEach.call(el.querySelectorAll(".lr-del"), function (btn) {
-      btn.addEventListener("click", function () { removeCoachFromWhitelist(btn.getAttribute("data-slug")); });
+      btn.addEventListener("click", function () { removeCoachGrant(btn.getAttribute("data-id")); });
     });
   }
   function renderAdminGymList() {
@@ -1538,9 +1559,16 @@
   Array.prototype.forEach.call(document.querySelectorAll(".admin-tab"), function (btn) {
     btn.addEventListener("click", function () { setAdminTab(btn.getAttribute("data-admin-tab")); });
   });
+  function populateNewCoachTeamSelect() {
+    var sel = document.getElementById("newCoachTeam");
+    var ids = Object.keys(teams).sort(function (a, b) { return teams[a].name.localeCompare(teams[b].name); });
+    sel.innerHTML = ids.length
+      ? ids.map(function (tid) { return '<option value="' + tid + '">' + escapeHtml(teams[tid].name) + '</option>'; }).join("")
+      : '<option value="">Aucune équipe créée</option>';
+  }
   function openAdminOverlay() {
-    document.getElementById("adminTeamHint").textContent = teamId && teams[teamId] ? ("Équipe active : " + teams[teamId].name) : "Choisis d'abord une équipe.";
     setAdminTab("gyms");
+    populateNewCoachTeamSelect();
     renderAdminCoachList();
     renderAdminGymList();
     renderAdminMembersList();
@@ -1909,10 +1937,11 @@
   });
   document.getElementById("newCoachAdd").addEventListener("click", function () {
     var input = document.getElementById("newCoachName");
+    var teamSel = document.getElementById("newCoachTeam");
     var name = input.value.trim();
     if (!name) { toast("Entre un nom"); return; }
-    if (!teamId) { toast("Choisis d'abord une équipe"); return; }
-    addCoachToWhitelist(name);
+    if (!teamSel.value) { toast("Crée d'abord une équipe"); return; }
+    addCoachToWhitelist(name, teamSel.value);
     input.value = "";
   });
   document.getElementById("newGymAdd").addEventListener("click", function () {

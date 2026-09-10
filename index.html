@@ -974,6 +974,7 @@
     } catch (e) {}
   }
   function saveIdentity(name, role, email, position, position2, adminUnlocked) {
+    var prevEmail = identity ? identity.email : null;
     identity = { name: name, role: role, email: email, position: position || "", position2: position2 || "" };
     if (adminUnlocked) isAdmin = true;
     try {
@@ -981,6 +982,9 @@
       if (isAdmin) localStorage.setItem("creneau_admin", "1");
     } catch (e) {}
     upsertPerson();
+    if (dbReady && prevEmail && emailKey(prevEmail) !== emailKey(email)) {
+      emailDirectoryCol().doc(emailKey(prevEmail)).delete().catch(function () {});
+    }
     if (dbReady) subscribeMyAssignment();
     renderAll();
   }
@@ -996,6 +1000,11 @@
       position: identity.position || "", position2: identity.position2 || "",
       updatedAt: new Date().toISOString()
     }).catch(function () {});
+    if (identity.email) {
+      emailDirectoryCol().doc(emailKey(identity.email)).set({
+        name: identity.name, slug: slug, teamId: teamId, updatedAt: new Date().toISOString()
+      }).catch(function () {});
+    }
   }
   // effectiveRole() is the PARTICIPATION role — decides whether this
   // person sees availability chips and counts as a player in rosters.
@@ -1053,6 +1062,8 @@
   function availCol(tid) { return db.collection("teams/" + tid + "/availability"); }
   function peopleCol(tid) { return db.collection("teams/" + tid + "/people"); }
   function assignmentsCol() { return db.collection("assignments"); }
+  function emailDirectoryCol() { return db.collection("emailDirectory"); }
+  function emailKey(email) { return (email || "").trim().toLowerCase(); }
   function coachGrantsCol() { return db.collection("coachGrants"); }
   function adminsCol() { return db.collection("admins"); }
 
@@ -2834,9 +2845,19 @@
     }
     var position = document.getElementById("onboardPosition").value;
     var position2 = document.getElementById("onboardPosition2").value;
-    saveIdentity(name, selectedRole, email, position, position2, adminUnlocked);
-    document.getElementById("onboardOverlay").classList.remove("show");
-    if (!teamId && dbReady) openTeamOverlay();
+    function finishOnboardSave() {
+      saveIdentity(name, selectedRole, email, position, position2, adminUnlocked);
+      document.getElementById("onboardOverlay").classList.remove("show");
+      if (!teamId && dbReady) openTeamOverlay();
+    }
+    if (!dbReady) { finishOnboardSave(); return; }
+    emailDirectoryCol().doc(emailKey(email)).get().then(function (snap) {
+      if (snap.exists && snap.data().slug !== slugify(name)) {
+        toast("Ce courriel est déjà utilisé par " + snap.data().name + ". Tape ce nom pour retrouver ton profil.");
+        return;
+      }
+      finishOnboardSave();
+    }).catch(function () { finishOnboardSave(); });
   });
   document.getElementById("fabAdd").addEventListener("click", function () { openSessionSheet(null); });
   document.getElementById("sessionCancel").addEventListener("click", closeSessionSheet);

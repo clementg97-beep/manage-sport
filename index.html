@@ -348,6 +348,16 @@
   .notif-item .t { font-weight: 700; }
   .notif-item .m { color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
 
+  .addr-results {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+    background: var(--bg-card); border: 1.5px solid var(--border); border-radius: var(--radius-md);
+    max-height: 220px; overflow-y: auto; box-shadow: var(--shadow);
+  }
+  .addr-result {
+    padding: 10px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border);
+  }
+  .addr-result:last-child { border-bottom: none; }
+  .addr-result:active { background: var(--accent-soft); }
   .list-row {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 10px 4px; border-bottom: 1px dashed var(--border); font-size: 13.5px;
@@ -530,7 +540,10 @@
       <h3>Gymnases (partagés entre équipes)</h3>
       <div class="inline-add" style="flex-direction:column; align-items:stretch;">
         <input type="text" id="newGymName" placeholder="Nom du gymnase" maxlength="60" style="margin-bottom:8px;">
-        <input type="text" id="newGymAddress" placeholder="Adresse complète" maxlength="120" style="margin-bottom:8px;">
+        <div style="position:relative; margin-bottom:8px;">
+          <input type="text" id="newGymAddress" placeholder="Tape pour chercher une adresse…" maxlength="200" autocomplete="off">
+          <div id="newGymAddressResults" class="addr-results" style="display:none;"></div>
+        </div>
         <button type="button" id="newGymAdd">Ajouter le gymnase</button>
       </div>
       <div id="gymList2"></div>
@@ -547,6 +560,10 @@
       <div class="hint" style="margin-top:-4px;">Chaque coach n'a accès qu'à l'équipe choisie ici — ajoute-le à plusieurs équipes s'il en gère plus d'une.</div>
       <input type="text" id="newCoachName" placeholder="Nom du coach" maxlength="40" style="margin-bottom:8px;">
       <select id="newCoachTeam" style="margin-bottom:8px;"></select>
+      <select id="newCoachPermission" style="margin-bottom:8px;">
+        <option value="manage">✏️ Peut créer/modifier des séances</option>
+        <option value="read">👁️ Lecture seule (l'admin crée pour lui)</option>
+      </select>
       <button type="button" id="newCoachAdd" class="btn-primary" style="margin-top:0;">Ajouter</button>
       <div id="coachWhitelistList" style="margin-top:10px;"></div>
     </div>
@@ -849,11 +866,20 @@
     if (isAdmin) return "coach";
     return coachWhitelist[slugify(identity.name)] ? "coach" : "joueur";
   }
-  // canManageTeam() is the MANAGEMENT permission — create/edit/delete
-  // sessions, see the roster as a manager. Admin always has it,
-  // independently of what they participate as.
+  // canManageTeam() is coach-tier VISIBILITY — see the roster/stats as
+  // a manager, get coach notifications. Admin always has it.
   function canManageTeam() {
     return isAdmin || effectiveRole() === "coach";
+  }
+  // canCreateSessions() is the narrower EDIT permission — create/edit/
+  // delete sessions. A coach granted "read"-only access sees
+  // everything canManageTeam() shows but can't touch sessions; the
+  // admin (or a "manage" coach) creates events on their behalf.
+  function canCreateSessions() {
+    if (isAdmin) return true;
+    if (effectiveRole() !== "coach") return false;
+    var grant = coachWhitelist[slugify(identity.name)];
+    return !!grant && grant.permission !== "read";
   }
   function isPendingCoach() {
     return !!identity && identity.role === "coach" && !isAdmin && effectiveRole() !== "coach";
@@ -872,7 +898,7 @@
     var roleLabel = (role === "coach" ? "Coach" : (isPendingCoach() ? "Joueur (coach en attente)" : "Joueur")) + (isAdmin ? " · Admin" : "");
     document.getElementById("chipRole").textContent = roleLabel;
     document.getElementById("avatarInit").textContent = initials(identity.name);
-    document.getElementById("fabAdd").style.display = (canManageTeam() && teamId) ? "flex" : "none";
+    document.getElementById("fabAdd").style.display = (canCreateSessions() && teamId) ? "flex" : "none";
     document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
     document.getElementById("icsExportBtn").style.display = teamId ? "flex" : "none";
   }
@@ -897,6 +923,43 @@
         return gymsCol().doc(gymId).update({ lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon) });
       })
       .catch(function () { /* best-effort — la carte restera juste absente pour ce gymnase */ });
+  }
+  var selectedGymCoords = null; // {lat, lng} — vidé si l'admin retape l'adresse à la main
+  var addrSearchTimer = null;
+  function wireAddressAutocomplete(inputId, resultsId, onPick) {
+    var input = document.getElementById(inputId);
+    var results = document.getElementById(resultsId);
+    input.addEventListener("input", function () {
+      selectedGymCoords = null;
+      var q = input.value.trim();
+      clearTimeout(addrSearchTimer);
+      if (q.length < 4) { results.style.display = "none"; results.innerHTML = ""; return; }
+      addrSearchTimer = setTimeout(function () {
+        var url = "https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=ca&q=" + encodeURIComponent(q);
+        fetch(url, { headers: { "Accept": "application/json" } })
+          .then(function (r) { return r.json(); })
+          .then(function (arr) {
+            if (!arr || !arr.length) { results.style.display = "none"; results.innerHTML = ""; return; }
+            results.innerHTML = arr.map(function (r, i) {
+              return '<div class="addr-result" data-idx="' + i + '">' + escapeHtml(r.display_name) + '</div>';
+            }).join("");
+            results.style.display = "block";
+            Array.prototype.forEach.call(results.querySelectorAll(".addr-result"), function (el) {
+              el.addEventListener("click", function () {
+                var r = arr[parseInt(el.getAttribute("data-idx"), 10)];
+                input.value = r.display_name;
+                results.style.display = "none";
+                results.innerHTML = "";
+                onPick({ lat: parseFloat(r.lat), lng: parseFloat(r.lon) });
+              });
+            });
+          })
+          .catch(function () { results.style.display = "none"; });
+      }, 400);
+    });
+    document.addEventListener("click", function (e) {
+      if (e.target !== input && !results.contains(e.target)) { results.style.display = "none"; }
+    });
   }
 
   // ---------- db wiring ----------
@@ -1450,24 +1513,37 @@
       .then(function (ref) { toast("Équipe créée"); selectTeam(ref.id); })
       .catch(function () { toast("Erreur de création"); });
   }
-  function addCoachToWhitelist(name, tid) {
+  function addCoachToWhitelist(name, tid, permission) {
     if (!dbReady || !tid) return;
     var slug = slugify(name);
     coachGrantsCol().doc(tid + "_" + slug).set({
-      name: name, teamId: tid, slug: slug, addedBy: identity ? identity.name : "", addedAt: new Date().toISOString()
+      name: name, teamId: tid, slug: slug, permission: permission || "manage",
+      addedBy: identity ? identity.name : "", addedAt: new Date().toISOString()
     }).then(function () { toast("Coach ajouté"); })
       .catch(function () { toast("Erreur"); });
   }
-  function removeCoachGrant(grantId) {
+  function setCoachGrantPermission(grantId, permission) {
     if (!dbReady) return;
+    coachGrantsCol().doc(grantId).update({ permission: permission, updatedAt: new Date().toISOString() })
+      .then(function () { toast("Droits mis à jour"); })
+      .catch(function () { toast("Erreur"); });
+  }
+  function removeCoachGrant(grantId, label) {
+    if (!dbReady) return;
+    if (!confirm("Retirer les droits de " + (label || "ce coach") + " sur cette équipe ?")) return;
     coachGrantsCol().doc(grantId).delete().then(function () { toast("Coach retiré"); })
       .catch(function () { toast("Erreur"); });
   }
-  function addGym(name, address) {
+  function addGym(name, address, lat, lng) {
     if (!dbReady) return;
     var slug = slugify(name);
-    gymsCol().doc(slug).set({ name: name, address: address, addedBy: identity ? identity.name : "", addedAt: new Date().toISOString() })
-      .then(function () { toast("Gymnase ajouté — repérage sur la carte en cours…"); geocodeAndSave(slug, address); })
+    var data = { name: name, address: address, addedBy: identity ? identity.name : "", addedAt: new Date().toISOString() };
+    if (lat && lng) { data.lat = lat; data.lng = lng; }
+    gymsCol().doc(slug).set(data)
+      .then(function () {
+        if (lat && lng) { toast("Gymnase ajouté"); }
+        else { toast("Gymnase ajouté — repérage sur la carte en cours…"); geocodeAndSave(slug, address); }
+      })
       .catch(function () { toast("Erreur"); });
   }
   function removeGym(id) {
@@ -1544,12 +1620,21 @@
     el.innerHTML = ids.map(function (id) {
       var g = allCoachGrants[id];
       var tname = teams[g.teamId] ? teams[g.teamId].name : "(équipe supprimée)";
-      return '<div class="list-row"><span><span class="lr-main">' + escapeHtml(g.name) + '</span>' +
+      var perm = g.permission || "manage";
+      return '<div class="list-row" style="align-items:flex-start;"><span><span class="lr-main">' + escapeHtml(g.name) + '</span>' +
         '<div class="lr-sub">' + escapeHtml(tname) + '</div></span>' +
-        '<button type="button" class="lr-del" data-id="' + id + '">Retirer</button></div>';
+        '<span style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">' +
+        '<select data-perm-id="' + id + '" style="width:auto; padding:5px 8px; font-size:11.5px;">' +
+        '<option value="manage"' + (perm === "manage" ? " selected" : "") + '>✏️ Créer/modifier</option>' +
+        '<option value="read"' + (perm === "read" ? " selected" : "") + '>👁️ Lecture seule</option>' +
+        '</select>' +
+        '<button type="button" class="lr-del" data-id="' + id + '" data-name="' + escapeHtml(g.name) + '">Retirer</button></span></div>';
     }).join("");
+    Array.prototype.forEach.call(el.querySelectorAll("[data-perm-id]"), function (sel) {
+      sel.addEventListener("change", function () { setCoachGrantPermission(sel.getAttribute("data-perm-id"), sel.value); });
+    });
     Array.prototype.forEach.call(el.querySelectorAll(".lr-del"), function (btn) {
-      btn.addEventListener("click", function () { removeCoachGrant(btn.getAttribute("data-id")); });
+      btn.addEventListener("click", function () { removeCoachGrant(btn.getAttribute("data-id"), btn.getAttribute("data-name")); });
     });
   }
   function renderAdminGymList() {
@@ -1822,7 +1907,7 @@
       html += '</div>';
     }
 
-    if (canManageTeam()) {
+    if (canCreateSessions()) {
       html += '<div class="card-tools">';
       html += '<button class="link-btn" data-act="edit" data-id="' + s.id + '">Modifier</button>';
       html += '<button class="link-btn danger" data-act="delete" data-id="' + s.id + '">Supprimer</button>';
@@ -1922,7 +2007,7 @@
     if (filtered.length === 0) {
       if (currentTab === "upcoming") {
         list.innerHTML = '<div class="empty"><div class="e-icon">🏐</div><div class="e-title">Aucune séance à venir</div>' +
-          '<div class="e-sub">' + (canManageTeam() ? "Appuie sur + pour planifier la prochaine séance." : "Ton coach n'a pas encore ajouté de séance.") + '</div></div>';
+          '<div class="e-sub">' + (canCreateSessions() ? "Appuie sur + pour planifier la prochaine séance." : "Ton coach n'a pas encore ajouté de séance.") + '</div></div>';
       } else {
         list.innerHTML = '<div class="empty"><div class="e-icon">📭</div><div class="e-title">Aucune séance passée</div></div>';
       }
@@ -2081,20 +2166,22 @@
   document.getElementById("newCoachAdd").addEventListener("click", function () {
     var input = document.getElementById("newCoachName");
     var teamSel = document.getElementById("newCoachTeam");
+    var permSel = document.getElementById("newCoachPermission");
     var name = input.value.trim();
     if (!name) { toast("Entre un nom"); return; }
     if (!teamSel.value) { toast("Crée d'abord une équipe"); return; }
-    addCoachToWhitelist(name, teamSel.value);
+    addCoachToWhitelist(name, teamSel.value, permSel.value);
     input.value = "";
   });
+  wireAddressAutocomplete("newGymAddress", "newGymAddressResults", function (coords) { selectedGymCoords = coords; });
   document.getElementById("newGymAdd").addEventListener("click", function () {
     var nameInput = document.getElementById("newGymName");
     var addrInput = document.getElementById("newGymAddress");
     var name = nameInput.value.trim();
     var address = addrInput.value.trim();
     if (!name || !address) { toast("Nom et adresse requis"); return; }
-    addGym(name, address);
-    nameInput.value = ""; addrInput.value = "";
+    addGym(name, address, selectedGymCoords ? selectedGymCoords.lat : null, selectedGymCoords ? selectedGymCoords.lng : null);
+    nameInput.value = ""; addrInput.value = ""; selectedGymCoords = null;
   });
   document.getElementById("newAdminAdd").addEventListener("click", function () {
     var input = document.getElementById("newAdminName");
